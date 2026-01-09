@@ -328,6 +328,19 @@ jobs:
           mvn -B deploy -DskipTests \
             -DaltDeploymentRepository=local::file:./"${STAGING_DIR}"
 
+      - name: Debug Artifact Paths
+        env:
+          ARTIFACT_PATH: ${{ inputs.artifact-path }}
+          STAGING_DIR: ${{ inputs.staging-deploy-dir }}
+        run: |
+          echo "=== Artifact Configuration ==="
+          echo "artifact-path: ${ARTIFACT_PATH}"
+          echo "staging-deploy-dir: ${STAGING_DIR}"
+          echo "=== Files matching artifact-path (for Docker) ==="
+          eval "ls -la ${ARTIFACT_PATH}" 2>/dev/null || echo "No files found"
+          echo "=== Staging directory contents (for JReleaser) ==="
+          find "${STAGING_DIR}" -type f 2>/dev/null | head -20 || echo "Staging dir not found"
+
       # Upload Docker artifacts separately (just the JAR for Docker builds)
       - name: Upload Docker Artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
@@ -560,6 +573,49 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
         with:
           name: docker-artifacts
+          path: /tmp/docker-artifacts
+
+      # Recreate the expected directory structure for JReleaser
+      # JReleaser config expects artifacts at their original build paths
+      # e.g., modules/api/target/api-1.0.0.jar
+      #
+      # Handle two cases based on artifact-path pattern:
+      # 1. Glob with "**" (e.g., "**/target/*.jar"): upload-artifact preserves directory structure
+      # 2. Specific path (e.g., "modules/api/target/api-*.jar"): files are flattened, need to recreate dirs
+      - name: Setup Artifacts for JReleaser
+        env:
+          ARTIFACT_PATH: ${{ inputs.artifact-path }}
+          STAGING_DIR: ${{ inputs.staging-deploy-dir }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          echo "=== JReleaser Artifact Setup ==="
+          echo "artifact-path input: ${ARTIFACT_PATH}"
+          echo "staging-deploy-dir: ${STAGING_DIR}"
+          echo "version: ${VERSION}"
+
+          echo "=== Downloaded docker-artifacts ==="
+          find /tmp/docker-artifacts -type f
+
+          echo "=== Downloaded release-artifacts (staging-deploy) ==="
+          find "${STAGING_DIR}" -type f 2>/dev/null | head -20 || echo "No staging dir"
+
+          # Check if artifact-path contains "**" glob pattern
+          if [[ "${ARTIFACT_PATH}" == *"**"* ]]; then
+            # Glob pattern with ** - upload-artifact preserved directory structure
+            # Move entire structure to workspace root
+            echo "=== Glob pattern detected - preserving directory structure ==="
+            cp -r /tmp/docker-artifacts/* ./
+          else
+            # Specific path - files were flattened, need to recreate directory structure
+            # e.g., "modules/api/target" from "modules/api/target/api-*.jar"
+            ARTIFACT_DIR=$(dirname "${ARTIFACT_PATH}")
+            echo "=== Specific path - recreating directory: ${ARTIFACT_DIR} ==="
+            mkdir -p "${ARTIFACT_DIR}"
+            mv /tmp/docker-artifacts/* "${ARTIFACT_DIR}/"
+          fi
+
+          echo "=== Available JARs for JReleaser ==="
+          find . -name "*.jar" -path "*/target/*" -type f
 
       - name: Run JReleaser
         uses: jreleaser/release-action@90ac653bb9c79d11179e65d81499f3f34527dcd5 # v2

@@ -207,6 +207,24 @@ jobs:
           path: "**/target/surefire-reports/*.xml"
           retention-days: 7
 
+      - name: Debug Artifact Path
+        if: inputs.docker-enabled
+        env:
+          ARTIFACT_PATH: ${{ inputs.artifact-path }}
+        run: |
+          echo "=== Artifact Configuration ==="
+          echo "artifact-path: ${ARTIFACT_PATH}"
+          echo "artifact-destination: ${{ inputs.artifact-destination }}"
+          echo "docker-context: ${{ inputs.docker-context }}"
+          echo "=== Files matching artifact-path pattern ==="
+          # Use find with glob expansion to show what will be uploaded
+          eval "ls -la ${ARTIFACT_PATH}" 2>/dev/null || echo "No files found matching pattern"
+          echo "=== Directory structure ==="
+          ARTIFACT_DIR=$(dirname "${ARTIFACT_PATH}" | head -1)
+          if [[ -d "${ARTIFACT_DIR}" ]]; then
+            ls -la "${ARTIFACT_DIR}/"
+          fi
+
       - name: Upload Build Artifacts
         if: inputs.docker-enabled
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
