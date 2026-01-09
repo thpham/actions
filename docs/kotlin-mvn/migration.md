@@ -1,6 +1,6 @@
 # Migration Guide
 
-How to migrate from standalone workflows to platform-workflows.
+How to migrate from standalone workflows to reusable workflows with security best practices.
 
 ## Prerequisites
 
@@ -74,27 +74,214 @@ export default {
 
 Copy and customize `jreleaser.yml` from your existing setup.
 
+## Security Best Practices
+
+Before migrating, understand these security principles:
+
+### 1. Use `permissions: {}` at Workflow Level
+
+Deny all permissions by default. The reusable workflow defines what it needs at the job level.
+
+### 2. Avoid `secrets: inherit`
+
+Never use `secrets: inherit` as it passes ALL repository secrets to the reusable workflow. Instead:
+
+- **Most workflows need no secrets block** - `GITHUB_TOKEN` is automatically available
+- **Only pass explicit secrets** when the workflow requires them (e.g., `SONAR_TOKEN`)
+
+### 3. Reference Table
+
+| Workflow                | Secrets Needed                     |
+| ----------------------- | ---------------------------------- |
+| `ci.yml`                | None (`GITHUB_TOKEN` is automatic) |
+| `release.yml`           | None (optional: GPG, webhooks)     |
+| `sonar.yml`             | `SONAR_TOKEN` (explicit)           |
+| `backport.yml`          | None (`GITHUB_TOKEN` is automatic) |
+| `suggest-backports.yml` | None (`GITHUB_TOKEN` is automatic) |
+| `commitlint.yml`        | None                               |
+| `cleanup-registry.yml`  | None (`GITHUB_TOKEN` is automatic) |
+| `lint-workflows.yml`    | None                               |
+
 ## Migration Steps
 
 ### Step 1: Create Caller Workflows
 
-Replace your existing workflows with minimal callers:
+Replace your existing workflows with minimal, secure callers.
+
+**`.github/workflows/ci.yml`**:
 
 ```yaml
-# .github/workflows/ci.yml
 name: CI
+
 on:
   push:
     branches: [main, "release/**"]
+    paths: [pom.xml, modules/**]
   pull_request:
     branches: [main, "release/**"]
+    types: [opened, synchronize, reopened, labeled]
+    paths: [pom.xml, modules/**]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Deny all permissions - reusable workflow defines what it needs
+permissions: {}
 
 jobs:
   ci:
-    uses: thpham/actions/.github/workflows/ci.yml@v1
+    uses: thpham/actions/.github/workflows/ci.yml@main
     with:
       docker-image-name: ${{ github.repository }}/your-api
-    secrets: inherit
+      docker-context: modules/api
+    # GITHUB_TOKEN is automatically available - no secrets block needed
+```
+
+**`.github/workflows/release.yml`**:
+
+```yaml
+name: Release
+
+on:
+  push:
+    branches: [main, "release/**"]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  release:
+    uses: thpham/actions/.github/workflows/release.yml@main
+    with:
+      docker-image-name: ${{ github.repository }}/your-api
+      docker-context: modules/api
+    # Optional secrets (uncomment if needed):
+    # secrets:
+    #   GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
+    #   GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+    #   TEAMS_WEBHOOK: ${{ secrets.TEAMS_WEBHOOK }}
+```
+
+**`.github/workflows/sonar.yml`**:
+
+```yaml
+name: SonarQube Analysis
+
+on:
+  push:
+    branches: [main, "release/**"]
+    paths: [pom.xml, modules/**]
+  pull_request:
+    branches: [main, "release/**"]
+    paths: [pom.xml, modules/**]
+
+concurrency:
+  group: sonar-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  sonar:
+    uses: thpham/actions/.github/workflows/sonar.yml@main
+    secrets:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # For self-hosted SonarQube:
+      # SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+```
+
+**`.github/workflows/backport.yml`**:
+
+```yaml
+name: Backport
+
+on: # zizmor: ignore[dangerous-triggers]
+  pull_request_target:
+    types: [closed]
+
+permissions: {}
+
+jobs:
+  backport:
+    uses: thpham/actions/.github/workflows/backport.yml@main
+```
+
+**`.github/workflows/suggest-backports.yml`**:
+
+```yaml
+name: Suggest Backport Labels
+
+on: # zizmor: ignore[dangerous-triggers]
+  pull_request_target:
+    types: [opened, ready_for_review]
+
+permissions: {}
+
+jobs:
+  suggest:
+    uses: thpham/actions/.github/workflows/suggest-backports.yml@main
+```
+
+**`.github/workflows/commitlint.yml`**:
+
+```yaml
+name: Commitlint
+
+on:
+  pull_request:
+    branches: [main, "release/**"]
+
+permissions: {}
+
+jobs:
+  commitlint:
+    uses: thpham/actions/.github/workflows/commitlint.yml@main
+```
+
+**`.github/workflows/cleanup-registry.yml`**:
+
+```yaml
+name: Cleanup Container Registry
+
+on:
+  pull_request:
+    types: [closed]
+  schedule:
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  cleanup:
+    uses: thpham/actions/.github/workflows/cleanup-registry.yml@main
+    with:
+      image-name: ${{ github.repository }}/your-api
+```
+
+**`.github/workflows/lint-workflows.yml`**:
+
+```yaml
+name: Lint Workflows
+
+on:
+  push:
+    branches: [main, "release/**"]
+    paths: [".github/workflows/**", ".github/actionlint.yaml"]
+  pull_request:
+    branches: [main, "release/**"]
+    paths: [".github/workflows/**", ".github/actionlint.yaml"]
+
+concurrency:
+  group: lint-workflows-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  lint:
+    uses: thpham/actions/.github/workflows/lint-workflows.yml@main
 ```
 
 ### Step 2: Create All Workflow Files
@@ -114,12 +301,14 @@ Create these files in `.github/workflows/`:
 
 ### Step 3: Configure Secrets
 
-Ensure these secrets are set in your repository:
+Only configure secrets that are actually needed:
 
-- `SONAR_TOKEN` (if using SonarQube)
-- `SONAR_HOST_URL` (if self-hosted)
-- `GPG_*` secrets (if signing)
-- `TEAMS_WEBHOOK` / `SLACK_WEBHOOK` (if notifying)
+- `SONAR_TOKEN` - Required for SonarQube analysis
+- `SONAR_HOST_URL` - Only if using self-hosted SonarQube
+- `GPG_*` secrets - Only if signing artifacts
+- `TEAMS_WEBHOOK` / `SLACK_WEBHOOK` - Only if sending notifications
+
+**Note:** `GITHUB_TOKEN` is automatically available to all workflows.
 
 ### Step 4: Test
 
@@ -132,45 +321,18 @@ Ensure these secrets are set in your repository:
 
 Remove old standalone workflow files (they're now replaced by callers).
 
-## Example: Minimal Setup
-
-For a simple project, you might only need:
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-on: [push, pull_request]
-jobs:
-  ci:
-    uses: thpham/actions/.github/workflows/ci.yml@v1
-    with:
-      docker-image-name: ${{ github.repository }}/api
-    secrets: inherit
-```
-
-```yaml
-# .github/workflows/release.yml
-name: Release
-on:
-  push:
-    branches: [main]
-jobs:
-  release:
-    uses: thpham/actions/.github/workflows/release.yml@v1
-    with:
-      docker-image-name: ${{ github.repository }}/api
-    secrets: inherit
-```
-
 ## Troubleshooting
 
 ### Workflow Not Found
 
-Ensure the platform-workflows repository is public or your repository has access.
+Ensure the actions repository is public or your repository has access.
 
 ### Permission Denied
 
-Check that `secrets: inherit` is used and required secrets are configured.
+Check that:
+
+1. The reusable workflow has the required `permissions:` at job level
+2. Required secrets are configured in your repository
 
 ### Docker Build Fails
 
@@ -186,4 +348,8 @@ Check:
 
 1. Config files exist and are valid JSON
 2. Conventional commits are being used
-3. `contents: write` permission is granted
+3. The reusable workflow has `contents: write` permission
+
+### Zizmor Warnings
+
+If you see `secrets-inherit` or `excessive-permissions` warnings, ensure you've applied the security best practices above (use `permissions: {}` and avoid `secrets: inherit`).

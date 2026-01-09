@@ -53,12 +53,15 @@ on:
   pull_request:
     branches: [main, "release/**"]
 
+# Deny all permissions - reusable workflow defines what it needs
+permissions: {}
+
 jobs:
   ci:
-    uses: thpham/actions/.github/workflows/ci.yml@v1
+    uses: thpham/actions/.github/workflows/ci.yml@main
     with:
       docker-image-name: ${{ github.repository }}/myservice-api
-    secrets: inherit
+    # GITHUB_TOKEN is automatically available - no secrets block needed
 ```
 
 ### Release Workflow
@@ -72,13 +75,20 @@ on:
     branches: [main, "release/**"]
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   release:
-    uses: thpham/actions/.github/workflows/release.yml@v1
+    uses: thpham/actions/.github/workflows/release.yml@main
     with:
       docker-image-name: ${{ github.repository }}/myservice-api
-    secrets: inherit
+    # GITHUB_TOKEN is automatically available
+    # Optional: uncomment to pass additional secrets
+    # secrets:
+    #   GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
 ```
+
+> **Security Note:** See [Security Best Practices](docs/README.md#security-best-practices) for details on `permissions: {}` and why to avoid `secrets: inherit`.
 
 ### All Available Workflows (kotlin-mvn)
 
