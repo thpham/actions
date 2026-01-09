@@ -19,7 +19,12 @@ This directory contains detailed documentation for each reusable workflow.
 
 See the [Migration Guide](migration.md) for instructions on migrating from existing workflows.
 
-## Architecture
+## Architecture & Concepts
+
+- [Workflow Architecture](workflow-architecture.md) - Flow diagrams, job dependencies, versioning strategy, and scenario guides
+- [GHE Cloud Compatibility](ghe-cloud-compatibility.md) - Enterprise migration guide and action compatibility report
+
+### Caller-Reusable Pattern
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
@@ -129,16 +134,16 @@ Most workflows only need `GITHUB_TOKEN`, which is **automatically available** to
 
 ### 3. Secrets by Workflow
 
-| Workflow              | Required Secrets                  | Notes                                   |
-| --------------------- | --------------------------------- | --------------------------------------- |
-| `ci.yml`              | None                              | `GITHUB_TOKEN` is automatic             |
-| `release.yml`         | None (optional: GPG\_\*, webhooks) | `GITHUB_TOKEN` is automatic             |
-| `sonar.yml`           | `SONAR_TOKEN`                     | Required for SonarQube analysis         |
-| `backport.yml`        | None                              | `GITHUB_TOKEN` is automatic             |
-| `suggest-backports.yml` | None                            | `GITHUB_TOKEN` is automatic             |
-| `commitlint.yml`      | None                              | No secrets needed                       |
-| `cleanup-registry.yml`| None                              | `GITHUB_TOKEN` is automatic             |
-| `lint-workflows.yml`  | None                              | No secrets needed                       |
+| Workflow                | Required Secrets                   | Notes                           |
+| ----------------------- | ---------------------------------- | ------------------------------- |
+| `ci.yml`                | None                               | `GITHUB_TOKEN` is automatic     |
+| `release.yml`           | None (optional: GPG\_\*, webhooks) | `GITHUB_TOKEN` is automatic     |
+| `sonar.yml`             | `SONAR_TOKEN`                      | Required for SonarQube analysis |
+| `backport.yml`          | None                               | `GITHUB_TOKEN` is automatic     |
+| `suggest-backports.yml` | None                               | `GITHUB_TOKEN` is automatic     |
+| `commitlint.yml`        | None                               | No secrets needed               |
+| `cleanup-registry.yml`  | None                               | `GITHUB_TOKEN` is automatic     |
+| `lint-workflows.yml`    | None                               | No secrets needed               |
 
 ### 4. Example: Secure Caller Workflow
 
