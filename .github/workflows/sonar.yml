@@ -1,0 +1,163 @@
+# Reusable workflow for SonarQube/SonarCloud analysis
+# Supports both SonarCloud and self-hosted SonarQube
+
+name: SonarQube Analysis
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        description: "Java version to use"
+        required: false
+        type: string
+        default: "17"
+      java-distribution:
+        description: "Java distribution"
+        required: false
+        type: string
+        default: "temurin"
+      maven-goals:
+        description: "Maven goals to run before analysis"
+        required: false
+        type: string
+        default: "verify"
+      sonar-args:
+        description: "Additional Sonar arguments"
+        required: false
+        type: string
+        default: ""
+      skip-dependabot:
+        description: "Skip analysis for Dependabot PRs"
+        required: false
+        type: boolean
+        default: true
+      skip-forks:
+        description: "Skip analysis for fork PRs"
+        required: false
+        type: boolean
+        default: true
+      runner:
+        description: "Runner to use"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      artifact-retention-days:
+        description: "Artifact retention period"
+        required: false
+        type: number
+        default: 1
+    secrets:
+      SONAR_TOKEN:
+        description: "SonarQube/SonarCloud token"
+        required: false
+      SONAR_HOST_URL:
+        description: "Self-hosted SonarQube URL (leave empty for SonarCloud)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  sonar:
+    name: SonarQube Analysis
+    runs-on: ${{ inputs.runner }}
+    permissions:
+      contents: read
+    # Skip for Dependabot PRs (no access to secrets) and fork PRs
+    if: |
+      (!inputs.skip-dependabot || github.actor != 'dependabot[bot]') &&
+      (!inputs.skip-forks || github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+
+    steps:
+      - name: Check if SonarQube is configured
+        id: sonar-check
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "${SONAR_TOKEN}" ]; then
+            echo "SONAR_TOKEN is not configured. Skipping SonarQube analysis."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.sonar-check.outputs.skip != 'true'
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Java
+        if: steps.sonar-check.outputs.skip != 'true'
+        uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: ${{ inputs.java-distribution }}
+
+      - name: Restore Maven cache
+        if: steps.sonar-check.outputs.skip != 'true'
+        # Read-only cache restore to prevent cache poisoning attacks
+        # Maven artifacts are immutable, so no hash-based invalidation needed
+        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven
+
+      - name: Restore SonarQube cache
+        if: steps.sonar-check.outputs.skip != 'true'
+        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Build and Analyze
+        if: steps.sonar-check.outputs.skip != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          MAVEN_GOALS: ${{ inputs.maven-goals }}
+          SONAR_ARGS: ${{ inputs.sonar-args }}
+        run: |
+          # Determine SonarQube host
+          if [ -n "${SONAR_HOST_URL}" ]; then
+            echo "Using self-hosted SonarQube: ${SONAR_HOST_URL}"
+            HOST_ARG="-Dsonar.host.url=${SONAR_HOST_URL}"
+          else
+            echo "Using SonarCloud"
+            HOST_ARG="-Dsonar.host.url=https://sonarcloud.io"
+          fi
+
+          # Run analysis
+          mvn -B "${MAVEN_GOALS}" sonar:sonar \
+            "${HOST_ARG}" \
+            "-Dsonar.token=${SONAR_TOKEN}" \
+            -Dsonar.coverage.jacoco.xmlReportPaths=**/target/site/jacoco/jacoco.xml \
+            "${SONAR_ARGS}"
+
+      - name: Upload Coverage Reports
+        if: steps.sonar-check.outputs.skip != 'true' && always()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: coverage-reports
+          path: "**/target/site/jacoco/"
+          retention-days: ${{ inputs.artifact-retention-days }}
+
+      - name: Save Maven cache
+        # Only save cache on push events (not PRs) to prevent cache poisoning
+        # Maven artifacts are immutable, so no hash-based invalidation needed
+        if: steps.sonar-check.outputs.skip != 'true' && github.event_name == 'push'
+        uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven
+
+      - name: Save SonarQube cache
+        # Only save cache on push events (not PRs) to prevent cache poisoning
+        if: steps.sonar-check.outputs.skip != 'true' && github.event_name == 'push'
+        uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar

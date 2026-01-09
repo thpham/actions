@@ -1,0 +1,162 @@
+# JReleaser Configuration
+# Handles: artifact distribution, Docker publishing, announcements, signing
+
+project:
+  name: myservice
+  description: Kotlin Spring Boot Multi-Module Project with Release Automation
+  longDescription: |
+    A modern Kotlin-based Spring Boot application demonstrating
+    best practices for release automation using Release Please and JReleaser.
+  license: Proprietary
+  authors:
+    - John Doe
+  tags:
+    - kotlin
+    - spring-boot
+    - maven
+    - release-automation
+  links:
+    homepage: https://github.com/myorg/myservice
+  languages:
+    java:
+      groupId: com.myorg.myservice
+      artifactId: myservice
+      version: "17"
+
+  # Version pattern defaults to SEMVER, which is what we want
+  #versionPattern: SEMVER
+
+# =============================================================================
+# Release Configuration
+# =============================================================================
+release:
+  github:
+    # Don't overwrite release - Release Please already created it
+    # Use update.enabled instead to append assets
+    overwrite: false
+
+    # Release Please creates the release, JReleaser enriches it
+    update:
+      enabled: true
+      sections:
+        - ASSETS
+
+    # Skip tag creation - Release Please handles this
+    skipTag: true
+
+    # Don't skip release - we want JReleaser to update it with assets
+    skipRelease: false
+
+    # Only upload assets for stable releases (not snapshots)
+    uploadAssets: RELEASE
+
+    # Skip changelog - Release Please handles this
+    changelog:
+      enabled: false
+
+    # Release name template
+    releaseName: 'v{{projectVersion}}'
+
+# =============================================================================
+# Signing Configuration (GPG) - Optional
+# =============================================================================
+signing:
+  active: NEVER  # Change to ALWAYS when GPG is configured
+  pgp:
+    armored: true
+    mode: MEMORY
+  # Credentials via environment variables:
+  # JRELEASER_GPG_SECRET_KEY
+  # JRELEASER_GPG_PASSPHRASE
+  # JRELEASER_GPG_PUBLIC_KEY
+
+# =============================================================================
+# Distribution - Maven Artifacts
+# =============================================================================
+deploy:
+  maven:
+    # GitHub Packages
+    github:
+      github-packages:
+        active: RELEASE
+        url: https://maven.pkg.github.com/myorg/myservice
+        # Disable Maven Central rules (sources/javadoc JARs not required for GitHub Packages)
+        applyMavenCentralRules: false
+        sourceJar: false
+        javadocJar: false
+        verifyPom: false
+        stagingRepositories:
+          - staging-deploy
+        # Credentials via: JRELEASER_GITHUB_TOKEN
+
+# =============================================================================
+# SBOM (Software Bill of Materials) Generation
+# =============================================================================
+catalog:
+  sbom:
+    # CycloneDX SBOM generation (industry standard)
+    cyclonedx:
+      active: ALWAYS
+      # Include distribution artifacts in SBOM
+      distributions: true
+      # Include project files in SBOM
+      files: true
+      # Output formats
+      formats:
+        - JSON
+        - XML
+      # Archive all SBOMs together
+      pack:
+        enabled: true
+        name: '{{projectName}}-{{projectVersion}}-sbom'
+
+# =============================================================================
+# Files to include in release
+# =============================================================================
+files:
+  artifacts:
+    - path: modules/api/target/api-{{projectVersion}}.jar
+      transform: 'api-{{projectVersion}}.jar'
+
+# =============================================================================
+# Announcements - Optional
+# =============================================================================
+# Uncomment and configure announce section when ready:
+#
+# announce:
+#   # Microsoft Teams notification
+#   teams:
+#     active: RELEASE
+#     webhook: '{{env.JRELEASER_TEAMS_WEBHOOK}}'
+#     messageTemplate: |
+#       {
+#         "@type": "MessageCard",
+#         "@context": "http://schema.org/extensions",
+#         "themeColor": "0076D7",
+#         "summary": "{{projectName}} {{projectVersion}} Released",
+#         "sections": [{
+#           "activityTitle": "{{projectName}} {{projectVersion}} has been released!",
+#           "facts": [{
+#             "name": "Version",
+#             "value": "{{projectVersion}}"
+#           }, {
+#             "name": "Docker Image",
+#             "value": "ghcr.io/myorg/myservice:{{projectVersion}}"
+#           }],
+#           "markdown": true
+#         }],
+#         "potentialAction": [{
+#           "@type": "OpenUri",
+#           "name": "View Release",
+#           "targets": [{
+#             "os": "default",
+#             "uri": "{{releaseNotesUrl}}"
+#           }]
+#         }]
+#       }
+#
+#   # Slack notification
+#   slack:
+#     active: RELEASE
+#     channel: '#releases'
+#     webhook: '{{env.JRELEASER_SLACK_WEBHOOK}}'

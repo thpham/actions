@@ -1,0 +1,57 @@
+# Reusable workflow for GitHub Actions workflow validation
+# Uses actionlint for syntax checking and zizmor for security scanning
+
+name: Lint Workflows
+
+on:
+  workflow_call:
+    inputs:
+      actionlint-config:
+        description: "Path to actionlint config file"
+        required: false
+        type: string
+        default: ".github/actionlint.yaml"
+      enable-zizmor:
+        description: "Enable zizmor security scanning"
+        required: false
+        type: boolean
+        default: true
+      runner:
+        description: "Runner to use"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    name: actionlint
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+
+      - name: Run actionlint
+        uses: rhysd/actionlint@0933c147c9d6587653d45fdcb4c497c57a65f9af # v1.7.10
+
+  zizmor:
+    name: zizmor (Security)
+    runs-on: ${{ inputs.runner }}
+    if: ${{ inputs.enable-zizmor }}
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+
+      - name: Run zizmor
+        # v0.3.0 - Uploads to GitHub Advanced Security automatically
+        uses: zizmorcore/zizmor-action@e639db99335bc9038abc0e066dfcd72e23d26fb4 # v0.3.0

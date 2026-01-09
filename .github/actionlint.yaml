@@ -1,0 +1,17 @@
+# actionlint configuration
+# See: https://github.com/rhysd/actionlint/blob/main/docs/config.md
+
+# GitHub-hosted ARM runners (not yet in actionlint's built-in list)
+# See: https://github.blog/changelog/2024-09-03-github-actions-arm64-linux-and-windows-runners-are-now-generally-available/
+self-hosted-runner:
+  labels:
+    - ubuntu-24.04-arm
+
+# Configuration variables defined in repository settings
+# config-variables: []
+
+# Paths to ignore certain errors (glob patterns)
+# paths:
+#   '.github/workflows/generated-*.yml':
+#     ignore:
+#       - 'SC2086'  # shellcheck: double quote warning

@@ -1,0 +1,91 @@
+# Reusable workflow for automated backport PR creation
+# Creates cherry-pick PRs when labeled PRs are merged
+
+name: Backport
+
+on:
+  workflow_call:
+    inputs:
+      label-pattern:
+        description: "Regex pattern for backport labels"
+        required: false
+        type: string
+        default: "^backport ([^ ]+)$"
+      check-snapshot-version:
+        description: "Warn if target branch is not SNAPSHOT"
+        required: false
+        type: boolean
+        default: true
+      runner:
+        description: "Runner to use"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
+# Note: This workflow requires pull_request_target trigger in the caller
+# for write permissions. Risk is mitigated by only running on merged PRs
+# from the same repository.
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backport:
+    name: Backport PR
+    runs-on: ${{ inputs.runner }}
+    # Only run on merged PRs from the same repository (not forks)
+    if: |
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout
+        # zizmor: ignore[artipacked] - persist-credentials required for backport action to push branches
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Backport Action
+        uses: korthout/backport-action@c656f5d5851037b2b38fb5db2691a03fa229e3b2 # v3.1.0
+        id: backport
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          label_pattern: ${{ inputs.label-pattern }}
+          pull_description: |
+            Backport of #${pull_number} to `${target_branch}`.
+
+            ---
+
+            ${pull_description}
+
+      - name: Check SNAPSHOT Version
+        if: ${{ steps.backport.outputs.created_pull_numbers != '' && inputs.check-snapshot-version }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CREATED_PRS: ${{ steps.backport.outputs.created_pull_numbers }}
+        run: |
+          for pr_number in $(echo "${CREATED_PRS}" | tr ',' ' '); do
+            # Get the target branch of the created PR
+            target_branch=$(gh pr view "${pr_number}" --json baseRefName -q '.baseRefName')
+
+            # Get the version from the target branch's pom.xml
+            version=$(gh api "repos/${GITHUB_REPOSITORY}/contents/pom.xml?ref=${target_branch}" \
+              -q '.content' | base64 -d | grep -oP '(?<=<version>)[^<]+' | head -1)
+
+            if [[ "${version}" != *-SNAPSHOT ]]; then
+              echo "::warning::PR #${pr_number} targets ${target_branch} which has version ${version} (not SNAPSHOT). Wait for version bump before merging!"
+
+              # Add a comment to the PR warning about this
+              gh pr comment "${pr_number}" --body "$(cat <<'EOF'
+          ⚠️ **Warning**: Target branch has a non-SNAPSHOT version.
+
+          Please wait for the SNAPSHOT version bump PR to be merged before merging this backport PR. Merging before the version bump may cause version conflicts.
+
+          The SNAPSHOT bump PR should be auto-merged shortly after the release.
+          EOF
+              )"
+            else
+              echo "PR #${pr_number} targets ${target_branch} with SNAPSHOT version ${version}"
+            fi
+          done

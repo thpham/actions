@@ -1,0 +1,46 @@
+# Reusable workflow for Conventional Commits linting
+# https://www.conventionalcommits.org/
+
+name: Commitlint
+
+on:
+  workflow_call:
+    inputs:
+      config-file:
+        description: "Path to commitlint config file"
+        required: false
+        type: string
+        default: "commitlint.config.mjs"
+      skip-dependabot:
+        description: "Skip linting for Dependabot PRs"
+        required: false
+        type: boolean
+        default: true
+      runner:
+        description: "Runner to use"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  commitlint:
+    name: Lint Commit Messages
+    runs-on: ${{ inputs.runner }}
+    # Skip for Dependabot PRs if configured - their commit messages don't follow conventional commits
+    if: ${{ !inputs.skip-dependabot || github.actor != 'dependabot[bot]' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Lint Commits
+        uses: wagoid/commitlint-github-action@b948419dd99f3fd78a6548d48f94e3df7f6bf3ed # v6.2.1
+        with:
+          configFile: ${{ inputs.config-file }}

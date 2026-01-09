@@ -1,0 +1,492 @@
+# Reusable CI workflow for Maven/Kotlin/Spring Boot projects
+# Features: Build, test, lint, and optional multi-arch Docker builds
+
+name: CI
+
+on:
+  workflow_call:
+    inputs:
+      # Java configuration
+      java-version:
+        description: "Java version to use"
+        required: false
+        type: string
+        default: "17"
+      java-distribution:
+        description: "Java distribution"
+        required: false
+        type: string
+        default: "temurin"
+
+      # Maven configuration
+      maven-goals:
+        description: "Maven goals to run"
+        required: false
+        type: string
+        default: "verify"
+      spotless-check:
+        description: "Run Spotless format check"
+        required: false
+        type: boolean
+        default: true
+      cancel-on-lint-failure:
+        description: "Cancel workflow if lint fails"
+        required: false
+        type: boolean
+        default: true
+
+      # Docker configuration
+      docker-enabled:
+        description: "Enable Docker builds"
+        required: false
+        type: boolean
+        default: true
+      docker-registry:
+        description: "Container registry URL"
+        required: false
+        type: string
+        default: "ghcr.io"
+      docker-image-name:
+        description: "Docker image name (e.g., owner/repo/image-name)"
+        required: true
+        type: string
+      docker-context:
+        description: "Docker build context path"
+        required: false
+        type: string
+        default: "."
+      docker-file:
+        description: "Path to Dockerfile (relative to context)"
+        required: false
+        type: string
+        default: "Dockerfile"
+      docker-build-args:
+        description: "Additional Docker build args (multiline)"
+        required: false
+        type: string
+        default: ""
+      pr-preview-label:
+        description: "Label to trigger PR image builds"
+        required: false
+        type: string
+        default: "preview-image"
+
+      # Artifact configuration
+      artifact-path:
+        description: "Path to build artifacts"
+        required: false
+        type: string
+        default: "**/target/*.jar"
+      artifact-retention-days:
+        description: "Artifact retention period"
+        required: false
+        type: number
+        default: 1
+
+      # Runner configuration
+      enable-arm64:
+        description: "Enable ARM64 Docker builds"
+        required: false
+        type: boolean
+        default: true
+      amd64-runner:
+        description: "AMD64 runner"
+        required: false
+        type: string
+        default: "ubuntu-latest"
+      arm64-runner:
+        description: "ARM64 runner"
+        required: false
+        type: string
+        default: "ubuntu-24.04-arm"
+
+    outputs:
+      version:
+        description: "Maven project version"
+        value: ${{ jobs.build.outputs.version }}
+      primary_tag:
+        description: "Primary Docker image tag"
+        value: ${{ jobs.build.outputs.primary_tag }}
+      rolling_tag:
+        description: "Rolling Docker image tag"
+        value: ${{ jobs.build.outputs.rolling_tag }}
+      is_pr:
+        description: "Whether this is a PR build"
+        value: ${{ jobs.build.outputs.is_pr }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ${{ inputs.amd64-runner }}
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      primary_tag: ${{ steps.tags.outputs.primary_tag }}
+      rolling_tag: ${{ steps.tags.outputs.rolling_tag }}
+      is_pr: ${{ steps.tags.outputs.is_pr }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: ${{ inputs.java-distribution }}
+
+      - name: Restore Maven cache
+        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-maven-
+
+      - name: Extract version from POM
+        id: version
+        run: |
+          VERSION=$(mvn help:evaluate -Dexpression=project.version -q -DforceStdout)
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "POM Version: ${VERSION}"
+
+      - name: Generate image tags
+        id: tags
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          SHA_SHORT=$(git rev-parse --short HEAD)
+          TIMESTAMP=$(date -u +%Y%m%d%H%M%S)
+
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            PRIMARY_TAG="pr-${PR_NUMBER}-${TIMESTAMP}-${SHA_SHORT}"
+            ROLLING_TAG="pr-${PR_NUMBER}"
+            {
+              echo "primary_tag=${PRIMARY_TAG}"
+              echo "rolling_tag=${ROLLING_TAG}"
+              echo "is_pr=true"
+            } >> "$GITHUB_OUTPUT"
+          else
+            BRANCH_NAME="${GITHUB_REF_NAME}"
+            # Sanitize branch name for tags (replace / with -)
+            BRANCH_TAG="${BRANCH_NAME//\//-}"
+            PRIMARY_TAG="${BRANCH_TAG}-${TIMESTAMP}-${SHA_SHORT}"
+            ROLLING_TAG="edge"
+            {
+              echo "primary_tag=${PRIMARY_TAG}"
+              echo "rolling_tag=${ROLLING_TAG}"
+              echo "is_pr=false"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "Primary tag (immutable): ${PRIMARY_TAG}"
+          echo "Rolling tag: ${ROLLING_TAG}"
+
+      - name: Build and Test
+        env:
+          MAVEN_GOALS: ${{ inputs.maven-goals }}
+        run: mvn -B "${MAVEN_GOALS}"
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        if: always()
+        with:
+          name: test-results
+          path: "**/target/surefire-reports/*.xml"
+          retention-days: 7
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: build-artifacts
+          path: ${{ inputs.artifact-path }}
+          retention-days: ${{ inputs.artifact-retention-days }}
+
+      - name: Save Maven cache
+        # Only save cache on push events (not PRs) to prevent cache poisoning
+        # Maven artifacts are immutable, so no hash-based invalidation needed
+        if: github.event_name == 'push'
+        uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven
+
+  lint:
+    name: Lint & Format Check
+    runs-on: ${{ inputs.amd64-runner }}
+    if: ${{ inputs.spotless-check }}
+    permissions:
+      contents: read
+      actions: write # Required to cancel workflow
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Java
+        uses: actions/setup-java@f2beeb24e141e01a676f977032f5a29d81c9e27e # v5
+        with:
+          java-version: ${{ inputs.java-version }}
+          distribution: ${{ inputs.java-distribution }}
+
+      - name: Restore Maven cache
+        # Read-only cache restore to prevent cache poisoning attacks
+        # Maven artifacts are immutable, so no hash-based invalidation needed
+        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven
+
+      - name: Check Formatting
+        id: spotless
+        run: mvn -B spotless:check
+        continue-on-error: true
+
+      - name: Cancel workflow on lint failure
+        if: ${{ steps.spotless.outcome == 'failure' && inputs.cancel-on-lint-failure }}
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v7
+        with:
+          script: |
+            console.log('Lint failed - cancelling workflow to save CI minutes');
+            await github.rest.actions.cancelWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId
+            });
+
+      - name: Fail job if lint failed
+        if: steps.spotless.outcome == 'failure'
+        run: |
+          echo "::error::Spotless check failed. Run 'mvn spotless:apply' to fix formatting."
+          exit 1
+
+  # Native Multi-Architecture Docker Build (Matrix Strategy)
+  build-image:
+    name: Build ${{ matrix.platform }}
+    needs: [build, lint]
+    # Build Docker images for:
+    # - PRs with 'preview-image' label
+    # - Push to main/master, but NOT for release commits (those are handled by release.yml)
+    if: |
+      always() &&
+      needs.build.result == 'success' &&
+      (needs.lint.result == 'success' || needs.lint.result == 'skipped') &&
+      inputs.docker-enabled &&
+      (
+        (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, inputs.pr-preview-label)) ||
+        (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') && !startsWith(github.event.head_commit.message, 'chore(main): release') && !startsWith(github.event.head_commit.message, 'chore(master): release'))
+      )
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ${{ inputs.amd64-runner }}
+          - platform: linux/arm64
+            runner: ${{ inputs.arm64-runner }}
+            enabled: ${{ inputs.enable-arm64 }}
+        exclude:
+          - enabled: false
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Prepare platform pair
+        id: prepare
+        run: |
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
+
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        with:
+          name: build-artifacts
+          # Download to modules/api/target/ since CI artifact only contains *.jar files
+          # (single glob pattern strips directory structure on upload)
+          path: ${{ inputs.docker-context }}/target/
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        with:
+          registry: ${{ inputs.docker-registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine image type
+        id: image-type
+        env:
+          IS_PR: ${{ needs.build.outputs.is_pr }}
+        run: |
+          if [[ "${IS_PR}" == "true" ]]; then
+            {
+              echo "type=pr"
+              echo "retention=3"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "type=snapshot"
+              echo "retention=7"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Docker Metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ inputs.docker-registry }}/${{ inputs.docker-image-name }}
+
+      - name: Build and Push by Digest
+        id: build
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        env:
+          DOCKER_CONTEXT: ${{ inputs.docker-context }}
+          DOCKER_FILE: ${{ inputs.docker-file }}
+        with:
+          # zizmor: ignore[template-injection] - workflow_call input from trusted callers, path value only
+          context: ${{ env.DOCKER_CONTEXT }}
+          file: ${{ env.DOCKER_CONTEXT }}/${{ env.DOCKER_FILE }}
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            GIT_SHA=${{ github.sha }}
+            BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
+            VERSION=${{ needs.build.outputs.version }}
+            IMAGE_TYPE=${{ steps.image-type.outputs.type }}
+            PR_NUMBER=${{ github.event.pull_request.number || '' }}
+            BRANCH_NAME=${{ github.head_ref || github.ref_name }}
+            RETENTION=${{ steps.image-type.outputs.retention }}
+            ${{ inputs.docker-build-args }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ inputs.docker-registry }}/${{ inputs.docker-image-name }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=${{ github.repository }}-${{ github.ref_name }}-${{ matrix.platform }}
+          cache-to: type=gha,scope=${{ github.repository }}-${{ github.ref_name }}-${{ matrix.platform }},mode=max
+
+      - name: Export Digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - name: Upload Digest
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: ${{ inputs.artifact-retention-days }}
+
+  merge-manifest:
+    name: Merge Multi-Arch Manifest
+    needs: [build, build-image]
+    if: always() && needs.build-image.result == 'success'
+    runs-on: ${{ inputs.amd64-runner }}
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+
+    steps:
+      - name: Download Digests
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Login to Container Registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+        with:
+          registry: ${{ inputs.docker-registry }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker Metadata
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ inputs.docker-registry }}/${{ inputs.docker-image-name }}
+          tags: |
+            type=raw,value=${{ needs.build.outputs.primary_tag }}
+            type=raw,value=${{ needs.build.outputs.rolling_tag }}
+
+      - name: Create Manifest List
+        working-directory: /tmp/digests
+        env:
+          REGISTRY: ${{ inputs.docker-registry }}
+          IMAGE_NAME: ${{ inputs.docker-image-name }}
+        run: |
+          # shellcheck disable=SC2046
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
+
+      - name: Inspect Manifest
+        env:
+          REGISTRY: ${{ inputs.docker-registry }}
+          IMAGE_NAME: ${{ inputs.docker-image-name }}
+          ROLLING_TAG: ${{ needs.build.outputs.rolling_tag }}
+        run: |
+          docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${ROLLING_TAG}"
+
+      - name: Comment PR with preview info
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v7
+        env:
+          PRIMARY_TAG: ${{ needs.build.outputs.primary_tag }}
+          ROLLING_TAG: ${{ needs.build.outputs.rolling_tag }}
+          REGISTRY_URL: ${{ inputs.docker-registry }}
+          IMAGE_NAME_VAL: ${{ inputs.docker-image-name }}
+        with:
+          script: |
+            const primaryTag = process.env.PRIMARY_TAG;
+            const rollingTag = process.env.ROLLING_TAG;
+            const registry = process.env.REGISTRY_URL;
+            const image = process.env.IMAGE_NAME_VAL;
+
+            const body = `## Preview Image
+
+            Docker image published for this PR (multi-arch: amd64 + arm64):
+
+            \`\`\`bash
+            # Immutable tag (recommended for testing)
+            docker pull ${registry}/${image}:${primaryTag}
+
+            # Rolling tag (always points to latest build of this PR)
+            docker pull ${registry}/${image}:${rollingTag}
+            \`\`\`
+
+            **Tags created:**
+            - \`${primaryTag}\` - immutable, commit-specific
+            - \`${rollingTag}\` - rolling, updates on each push
+
+            > These images will be automatically cleaned up after the PR is closed.
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
