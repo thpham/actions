@@ -85,10 +85,15 @@ on:
 
       # Artifact configuration
       artifact-path:
-        description: "Path to build artifacts"
+        description: "Path to build artifacts (glob pattern)"
         required: false
         type: string
         default: "**/target/*.jar"
+      artifact-destination:
+        description: "Destination folder for flattened artifacts (relative to docker-context)"
+        required: false
+        type: string
+        default: "target"
 
       # Runner configuration
       enable-arm64:
@@ -371,7 +376,21 @@ jobs:
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
         with:
           name: release-artifacts
-          # Download to workspace root - artifact contains `artifact-path` with directory structure
+          path: /tmp/build-artifacts
+
+      - name: Flatten Artifacts to Docker Context
+        env:
+          BUILD_CONTEXT: ${{ inputs.docker-context }}
+          ARTIFACT_DEST: ${{ inputs.artifact-destination }}
+        run: |
+          DEST_DIR="${BUILD_CONTEXT}/${ARTIFACT_DEST}"
+          mkdir -p "${DEST_DIR}"
+          echo "=== Downloaded artifacts ==="
+          find /tmp/build-artifacts -type f
+          echo "=== Flattening to ${DEST_DIR}/ ==="
+          find /tmp/build-artifacts -type f -exec cp {} "${DEST_DIR}/" \;
+          echo "=== Flattened artifacts ==="
+          ls -la "${DEST_DIR}/"
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
