@@ -18,15 +18,15 @@ jobs:
   cleanup:
     uses: thpham/actions/.github/workflows/cleanup-registry.yml@v1
     with:
-      image-name: myservice-api
+      image-name: ${{ github.repository }}/myservice-api
     secrets: inherit
 ```
 
 ## Inputs
 
-| Input             | Type    | Required | Default           | Description                   |
-| ----------------- | ------- | -------- | ----------------- | ----------------------------- |
-| `image-name`      | string  | **Yes**  | -                 | Image name (without registry) |
+| Input             | Type    | Required | Default           | Description                                          |
+| ----------------- | ------- | -------- | ----------------- | ---------------------------------------------------- |
+| `image-name`      | string  | **Yes**  | -                 | Full package path (e.g., `owner/repo/image-name`)    |
 | `keep-n-tagged`   | number  | No       | `5`               | Tagged images to keep         |
 | `delete-untagged` | boolean | No       | `true`            | Delete untagged manifests     |
 | `preserve-semver` | boolean | No       | `true`            | Preserve version tags         |
