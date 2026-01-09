@@ -393,12 +393,12 @@ jobs:
         id: build
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
         env:
-          DOCKER_CONTEXT: ${{ inputs.docker-context }}
-          DOCKER_FILE: ${{ inputs.docker-file }}
+          BUILD_CONTEXT: ${{ inputs.docker-context }}
+          BUILD_DOCKERFILE: ${{ inputs.docker-file }}
         with:
           # zizmor: ignore[template-injection] - workflow_call input from trusted callers, path value only
-          context: ${{ env.DOCKER_CONTEXT }}
-          file: ${{ env.DOCKER_CONTEXT }}/${{ env.DOCKER_FILE }}
+          context: ${{ env.BUILD_CONTEXT }}
+          file: ${{ env.BUILD_CONTEXT }}/${{ env.BUILD_DOCKERFILE }}
           platforms: ${{ matrix.platform }}
           build-args: |
             GIT_SHA=${{ github.sha }}
