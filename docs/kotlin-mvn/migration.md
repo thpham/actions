@@ -91,16 +91,16 @@ Never use `secrets: inherit` as it passes ALL repository secrets to the reusable
 
 ### 3. Reference Table
 
-| Workflow                | Secrets Needed                     |
-| ----------------------- | ---------------------------------- |
-| `ci.yml`                | None (`GITHUB_TOKEN` is automatic) |
-| `release.yml`           | None (optional: GPG, webhooks)     |
-| `sonar.yml`             | `SONAR_TOKEN` (explicit)           |
-| `backport.yml`          | None (`GITHUB_TOKEN` is automatic) |
-| `suggest-backports.yml` | None (`GITHUB_TOKEN` is automatic) |
-| `commitlint.yml`        | None                               |
-| `cleanup-registry.yml`  | None (`GITHUB_TOKEN` is automatic) |
-| `lint-workflows.yml`    | None                               |
+| Workflow                 | Secrets Needed                     |
+| ------------------------ | ---------------------------------- |
+| `kotlin-mvn-ci.yml`      | None (`GITHUB_TOKEN` is automatic) |
+| `kotlin-mvn-release.yml` | None (optional: GPG, webhooks)     |
+| `sonar.yml`              | `SONAR_TOKEN` (explicit)           |
+| `backport.yml`           | None (`GITHUB_TOKEN` is automatic) |
+| `suggest-backports.yml`  | None (`GITHUB_TOKEN` is automatic) |
+| `commitlint.yml`         | None                               |
+| `cleanup-registry.yml`   | None (`GITHUB_TOKEN` is automatic) |
+| `lint-workflows.yml`     | None                               |
 
 ## Migration Steps
 
@@ -131,7 +131,7 @@ permissions: {}
 
 jobs:
   ci:
-    uses: thpham/actions/.github/workflows/ci.yml@main
+    uses: thpham/actions/.github/workflows/kotlin-mvn-ci.yml@main
     with:
       docker-image-name: ${{ github.repository }}/your-api
       docker-context: modules/api
@@ -152,7 +152,7 @@ permissions: {}
 
 jobs:
   release:
-    uses: thpham/actions/.github/workflows/release.yml@main
+    uses: thpham/actions/.github/workflows/kotlin-mvn-release.yml@main
     with:
       docker-image-name: ${{ github.repository }}/your-api
       docker-context: modules/api

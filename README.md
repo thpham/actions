@@ -53,8 +53,12 @@ on:
   pull_request:
     branches: [main, "release/**"]
 
-# Deny all permissions - reusable workflow defines what it needs
-permissions: {}
+# Grant permissions required by the reusable workflow
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+  actions: write
 
 jobs:
   ci:
@@ -75,7 +79,12 @@ on:
     branches: [main, "release/**"]
   workflow_dispatch:
 
-permissions: {}
+# Grant permissions required by the reusable workflow
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+  actions: write
 
 jobs:
   release:
@@ -88,7 +97,7 @@ jobs:
     #   GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
 ```
 
-> **Security Note:** See [Security Best Practices](docs/README.md#security-best-practices) for details on `permissions: {}` and why to avoid `secrets: inherit`.
+> **Security Note:** See [Security Best Practices](docs/README.md#security-best-practices) for the required permissions per workflow and why to avoid `secrets: inherit`.
 
 ### All Available Workflows (kotlin-mvn)
 

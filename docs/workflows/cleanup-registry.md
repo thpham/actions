@@ -5,7 +5,7 @@ Automated container image lifecycle management for GitHub Container Registry.
 ## Usage
 
 ```yaml
-name: Cleanup Registry
+name: Cleanup Container Registry
 
 on:
   pull_request:
@@ -14,24 +14,36 @@ on:
     - cron: "0 3 * * *" # Daily at 3 AM UTC
   workflow_dispatch:
 
+# Permissions required by the reusable workflow
+permissions:
+  packages: write
+  pull-requests: read
+
 jobs:
   cleanup:
-    uses: thpham/actions/.github/workflows/cleanup-registry.yml@v1
+    uses: thpham/actions/.github/workflows/cleanup-registry.yml@main
     with:
-      image-name: ${{ github.repository }}/myservice-api
-    secrets: inherit
+      image-name: ${{ github.event.repository.name }}/myproject-api
+    # GITHUB_TOKEN is automatically available to reusable workflows
 ```
+
+## Permissions
+
+| Permission      | Purpose                         |
+| --------------- | ------------------------------- |
+| `packages`      | Write - Delete container images |
+| `pull-requests` | Read - Access PR metadata       |
 
 ## Inputs
 
-| Input             | Type    | Required | Default           | Description                                          |
-| ----------------- | ------- | -------- | ----------------- | ---------------------------------------------------- |
-| `image-name`      | string  | **Yes**  | -                 | Full package path (e.g., `owner/repo/image-name`)    |
-| `keep-n-tagged`   | number  | No       | `5`               | Tagged images to keep         |
-| `delete-untagged` | boolean | No       | `true`            | Delete untagged manifests     |
-| `preserve-semver` | boolean | No       | `true`            | Preserve version tags         |
-| `preserve-edge`   | boolean | No       | `true`            | Preserve edge tag             |
-| `runner`          | string  | No       | `'ubuntu-latest'` | Runner to use                 |
+| Input             | Type    | Required | Default           | Description                                       |
+| ----------------- | ------- | -------- | ----------------- | ------------------------------------------------- |
+| `image-name`      | string  | **Yes**  | -                 | Full package path (e.g., `owner/repo/image-name`) |
+| `keep-n-tagged`   | number  | No       | `5`               | Tagged images to keep                             |
+| `delete-untagged` | boolean | No       | `true`            | Delete untagged manifests                         |
+| `preserve-semver` | boolean | No       | `true`            | Preserve version tags                             |
+| `preserve-edge`   | boolean | No       | `true`            | Preserve edge tag                                 |
+| `runner`          | string  | No       | `'ubuntu-latest'` | Runner to use                                     |
 
 ## Jobs
 

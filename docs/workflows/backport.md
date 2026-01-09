@@ -7,15 +7,27 @@ Automatically creates cherry-pick PRs when labeled PRs are merged.
 ```yaml
 name: Backport
 
-on:
+on: # zizmor: ignore[dangerous-triggers]
   pull_request_target:
     types: [closed]
 
+# Permissions required by the reusable workflow
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   backport:
-    uses: thpham/actions/.github/workflows/backport.yml@v1
-    secrets: inherit
+    uses: thpham/actions/.github/workflows/backport.yml@main
+    # GITHUB_TOKEN is automatically available to reusable workflows
 ```
+
+## Permissions
+
+| Permission      | Purpose                          |
+| --------------- | -------------------------------- |
+| `contents`      | Write - Push cherry-pick commits |
+| `pull-requests` | Write - Create backport PRs      |
 
 ## Inputs
 

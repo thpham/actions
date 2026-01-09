@@ -5,27 +5,48 @@ Code quality and coverage analysis with SonarQube or SonarCloud.
 ## Usage
 
 ```yaml
-name: SonarQube
+name: SonarQube Analysis
 
 on:
   push:
-    branches: [main, master, "release/**"]
-    paths: ["pom.xml", "src/**", "modules/**"]
+    branches:
+      - main
+      - master
+      - "release/**"
+    paths:
+      - "pom.xml"
+      - "modules/**"
   pull_request:
-    branches: [main, master, "release/**"]
-    paths: ["pom.xml", "src/**", "modules/**"]
+    branches:
+      - main
+      - master
+      - "release/**"
+    paths:
+      - "pom.xml"
+      - "modules/**"
 
 concurrency:
   group: sonar-${{ github.ref }}
   cancel-in-progress: true
 
+# Permissions required by the reusable workflow
+permissions:
+  contents: read
+
 jobs:
   sonar:
-    uses: thpham/actions/.github/workflows/sonar.yml@v1
+    uses: thpham/actions/.github/workflows/sonar.yml@main
     secrets:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      # For self-hosted SonarQube (optional - uncomment if needed)
+      # SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 ```
+
+## Permissions
+
+| Permission | Purpose                         |
+| ---------- | ------------------------------- |
+| `contents` | Read - Access code for analysis |
 
 ## Inputs
 

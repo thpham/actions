@@ -58,10 +58,10 @@ These actions interact with container registries or external services and **requ
 
 #### 1. docker/login-action
 
-| Property       | Value               |
-| -------------- | ------------------- |
-| **Used In**    | ci.yml, release.yml |
-| **Risk Level** | **CRITICAL**        |
+| Property       | Value                                     |
+| -------------- | ----------------------------------------- |
+| **Used In**    | kotlin-mvn-ci.yml, kotlin-mvn-release.yml |
+| **Risk Level** | **CRITICAL**                              |
 
 **Current Configuration:**
 
@@ -91,10 +91,10 @@ env:
 
 #### 2. docker/build-push-action
 
-| Property       | Value               |
-| -------------- | ------------------- |
-| **Used In**    | ci.yml, release.yml |
-| **Risk Level** | **CRITICAL**        |
+| Property       | Value                                     |
+| -------------- | ----------------------------------------- |
+| **Used In**    | kotlin-mvn-ci.yml, kotlin-mvn-release.yml |
+| **Risk Level** | **CRITICAL**                              |
 
 **Current Configuration:**
 
@@ -161,10 +161,10 @@ These actions lack built-in enterprise URL configuration and may require workaro
 
 #### 4. jreleaser/release-action
 
-| Property       | Value       |
-| -------------- | ----------- |
-| **Used In**    | release.yml |
-| **Risk Level** | **HIGH**    |
+| Property       | Value                  |
+| -------------- | ---------------------- |
+| **Used In**    | kotlin-mvn-release.yml |
+| **Risk Level** | **HIGH**               |
 
 **Current Configuration:**
 
@@ -270,10 +270,10 @@ These actions have enterprise support or minimal external dependencies.
 
 #### 7. googleapis/release-please-action
 
-| Property       | Value       |
-| -------------- | ----------- |
-| **Used In**    | release.yml |
-| **Risk Level** | **MEDIUM**  |
+| Property       | Value                  |
+| -------------- | ---------------------- |
+| **Used In**    | kotlin-mvn-release.yml |
+| **Risk Level** | **MEDIUM**             |
 
 **Current Configuration:**
 
@@ -304,10 +304,10 @@ with:
 
 #### 8. docker/metadata-action
 
-| Property       | Value               |
-| -------------- | ------------------- |
-| **Used In**    | ci.yml, release.yml |
-| **Risk Level** | **MEDIUM**          |
+| Property       | Value                                     |
+| -------------- | ----------------------------------------- |
+| **Used In**    | kotlin-mvn-ci.yml, kotlin-mvn-release.yml |
+| **Risk Level** | **MEDIUM**                                |
 
 **Current Configuration:**
 
@@ -334,18 +334,18 @@ with:
 
 These are core GitHub actions that work seamlessly across all GitHub deployments.
 
-| Action                              | Used In                        | Notes                                  |
-| ----------------------------------- | ------------------------------ | -------------------------------------- |
-| **actions/checkout**                | All workflows                  | Core action, fully compatible          |
-| **actions/setup-java**              | ci.yml, release.yml, sonar.yml | Core action, fully compatible          |
-| **actions/cache/restore**           | ci.yml, sonar.yml              | Uses GitHub Actions cache service      |
-| **actions/cache/save**              | ci.yml, sonar.yml              | Uses GitHub Actions cache service      |
-| **actions/upload-artifact**         | ci.yml, release.yml, sonar.yml | Uses GitHub Actions artifact storage   |
-| **actions/download-artifact**       | ci.yml, release.yml            | Uses GitHub Actions artifact storage   |
-| **actions/github-script**           | ci.yml, suggest-backports.yml  | Uses `github` object (auto-configured) |
-| **wagoid/commitlint-github-action** | commitlint.yml                 | Local linting, no external calls       |
-| **rhysd/actionlint**                | lint-workflows.yml             | Local linting, no external calls       |
-| **docker/setup-buildx-action**      | ci.yml, release.yml            | Local Docker setup                     |
+| Action                              | Used In                                              | Notes                                  |
+| ----------------------------------- | ---------------------------------------------------- | -------------------------------------- |
+| **actions/checkout**                | All workflows                                        | Core action, fully compatible          |
+| **actions/setup-java**              | kotlin-mvn-ci.yml, kotlin-mvn-release.yml, sonar.yml | Core action, fully compatible          |
+| **actions/cache/restore**           | kotlin-mvn-ci.yml, sonar.yml                         | Uses GitHub Actions cache service      |
+| **actions/cache/save**              | kotlin-mvn-ci.yml, sonar.yml                         | Uses GitHub Actions cache service      |
+| **actions/upload-artifact**         | kotlin-mvn-ci.yml, kotlin-mvn-release.yml, sonar.yml | Uses GitHub Actions artifact storage   |
+| **actions/download-artifact**       | kotlin-mvn-ci.yml, kotlin-mvn-release.yml            | Uses GitHub Actions artifact storage   |
+| **actions/github-script**           | kotlin-mvn-ci.yml, suggest-backports.yml             | Uses `github` object (auto-configured) |
+| **wagoid/commitlint-github-action** | commitlint.yml                                       | Local linting, no external calls       |
+| **rhysd/actionlint**                | lint-workflows.yml                                   | Local linting, no external calls       |
+| **docker/setup-buildx-action**      | kotlin-mvn-ci.yml, kotlin-mvn-release.yml            | Local Docker setup                     |
 
 ---
 
@@ -374,7 +374,7 @@ env:
 ```yaml
 jobs:
   ci:
-    uses: thpham/actions/.github/workflows/ci.yml@main
+    uses: thpham/actions/.github/workflows/kotlin-mvn-ci.yml@main
     with:
       registry: ghcr.YOUR-SUBDOMAIN.ghe.com
 ```
@@ -389,7 +389,7 @@ with:
   github-api-url: https://api.YOUR-SUBDOMAIN.ghe.com
 ```
 
-#### 3. Update release.yml (Release Please)
+#### 3. Update kotlin-mvn-release.yml (Release Please)
 
 Add enterprise URL inputs:
 

@@ -1,6 +1,8 @@
-# Release Workflow
+# Kotlin/Maven Release Workflow
 
-Automated releases with Release Please, multi-arch Docker builds, and JReleaser distribution.
+Automated releases with Release Please, multi-arch Docker builds, and JReleaser distribution for Kotlin/Maven/Spring Boot projects.
+
+**Workflow file:** `kotlin-mvn-release.yml`
 
 ## Usage
 
@@ -12,13 +14,33 @@ on:
     branches: [main, master, "release/**"]
   workflow_dispatch:
 
+# Permissions required by the reusable workflow
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+  actions: write
+
 jobs:
   release:
-    uses: thpham/actions/.github/workflows/release.yml@v1
+    uses: thpham/actions/.github/workflows/kotlin-mvn-release.yml@main
     with:
       docker-image-name: ${{ github.repository }}/myservice-api
-    secrets: inherit
+    # GITHUB_TOKEN is automatically available - no secrets block needed
+    # Optional secrets (uncomment if needed):
+    # secrets:
+    #   GPG_SECRET_KEY: ${{ secrets.GPG_SECRET_KEY }}
+    #   GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
 ```
+
+## Permissions
+
+| Permission      | Purpose                                     |
+| --------------- | ------------------------------------------- |
+| `contents`      | Write - Create tags, branches, and releases |
+| `packages`      | Write - Push Docker images to GHCR          |
+| `pull-requests` | Write - Create/merge release PRs            |
+| `actions`       | Write - Cancel duplicate workflows          |
 
 ## Inputs
 

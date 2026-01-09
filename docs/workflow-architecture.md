@@ -24,16 +24,16 @@ The reusable workflows work together to provide:
 - **Code Quality**: SonarQube analysis and commit message validation
 - **Container Registry Management**: Automatic cleanup of old images
 
-| Workflow                | Purpose                                                       |
-| ----------------------- | ------------------------------------------------------------- |
-| `ci.yml`                | Build, test, and lint on PRs and pushes                       |
-| `release.yml`           | Orchestrates releases, creates branches, builds Docker images |
-| `backport.yml`          | Automatically creates backport PRs when labeled               |
-| `suggest-backports.yml` | Suggests backport labels for fix/security PRs                 |
-| `commitlint.yml`        | Enforces Conventional Commits specification                   |
-| `sonar.yml`             | Code quality and coverage analysis                            |
-| `lint-workflows.yml`    | Validates workflow syntax and security                        |
-| `cleanup-registry.yml`  | Manages container image lifecycle                             |
+| Workflow                 | Purpose                                                                            |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| `kotlin-mvn-ci.yml`      | Build, test, and lint on PRs and pushes (Kotlin/Maven stack)                       |
+| `kotlin-mvn-release.yml` | Orchestrates releases, creates branches, builds Docker images (Kotlin/Maven stack) |
+| `backport.yml`           | Automatically creates backport PRs when labeled                                    |
+| `suggest-backports.yml`  | Suggests backport labels for fix/security PRs                                      |
+| `commitlint.yml`         | Enforces Conventional Commits specification                                        |
+| `sonar.yml`              | Code quality and coverage analysis                                                 |
+| `lint-workflows.yml`     | Validates workflow syntax and security                                             |
+| `cleanup-registry.yml`   | Manages container image lifecycle                                                  |
 
 ---
 
@@ -126,7 +126,7 @@ main (development)
 ### Release Workflow
 
 ```
-                          release.yml
+                     kotlin-mvn-release.yml
                               │
     ┌─────────────────────────┼────────────────────────┐
     │                         │                        │
@@ -153,7 +153,7 @@ distribute (JReleaser)
 ### CI Workflow
 
 ```
-                            ci.yml
+                       kotlin-mvn-ci.yml
                               │
     ┌─────────────────────────┼────────────────────┐
     │                         │                    │
@@ -279,7 +279,7 @@ release/1.10: 1.10.1-SNAPSHOT (ready for patches)
 **Manual Trigger**:
 
 ```bash
-gh workflow run release.yml --ref main
+gh workflow run kotlin-mvn-release.yml --ref main
 ```
 
 #### Backport PR Version Conflict
@@ -336,17 +336,17 @@ git checkout -b release/1.10
 git push origin release/1.10
 
 # Trigger Release workflow for SNAPSHOT bump
-gh workflow run release.yml --ref release/1.10
+gh workflow run kotlin-mvn-release.yml --ref release/1.10
 ```
 
 #### Manually Trigger Release
 
 ```bash
 # From main branch
-gh workflow run release.yml --ref main
+gh workflow run kotlin-mvn-release.yml --ref main
 
 # From release branch
-gh workflow run release.yml --ref release/1.10
+gh workflow run kotlin-mvn-release.yml --ref release/1.10
 ```
 
 #### Clean Up Stale Images
@@ -383,7 +383,7 @@ gh run rerun RUN_ID
    ```
 4. **Re-run release workflow**:
    ```bash
-   gh workflow run release.yml --ref main
+   gh workflow run kotlin-mvn-release.yml --ref main
    ```
 
 #### Recover from Version Conflict

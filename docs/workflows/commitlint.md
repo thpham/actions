@@ -9,13 +9,28 @@ name: Commitlint
 
 on:
   pull_request:
-    branches: [main, master, "release/**"]
+    branches:
+      - main
+      - master
+      - "release/**"
+
+# Permissions required by the reusable workflow
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
-  lint:
-    uses: thpham/actions/.github/workflows/commitlint.yml@v1
-    secrets: inherit
+  commitlint:
+    uses: thpham/actions/.github/workflows/commitlint.yml@main
+    # No secrets needed for commitlint
 ```
+
+## Permissions
+
+| Permission      | Purpose                      |
+| --------------- | ---------------------------- |
+| `contents`      | Read - Access commit history |
+| `pull-requests` | Read - Access PR commits     |
 
 ## Inputs
 

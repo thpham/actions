@@ -9,14 +9,36 @@ name: Lint Workflows
 
 on:
   push:
-    paths: [".github/workflows/**"]
+    branches:
+      - main
+      - master
+      - "release/**"
+    paths:
+      - ".github/workflows/**"
+      - ".github/actionlint.yaml"
   pull_request:
-    paths: [".github/workflows/**"]
+    branches:
+      - main
+      - master
+      - "release/**"
+    paths:
+      - ".github/workflows/**"
+      - ".github/actionlint.yaml"
+
+concurrency:
+  group: lint-workflows-${{ github.ref }}
+  cancel-in-progress: true
+
+# Permissions required by the reusable workflow
+permissions:
+  contents: read
+  actions: read
+  security-events: write
 
 jobs:
   lint:
-    uses: thpham/actions/.github/workflows/lint-workflows.yml@v1
-    secrets: inherit
+    uses: thpham/actions/.github/workflows/lint-workflows.yml@main
+    # No secrets needed for linting
 ```
 
 ## Inputs
@@ -63,6 +85,8 @@ config-variables:
 
 ## Permissions
 
-- `contents: read` (both jobs)
-- `actions: read` (zizmor only)
-- `security-events: write` (zizmor only)
+| Permission        | Purpose                             |
+| ----------------- | ----------------------------------- |
+| `contents`        | Read - Access workflow files        |
+| `actions`         | Read - Access workflow run metadata |
+| `security-events` | Write - Upload SARIF to GitHub GHAS |

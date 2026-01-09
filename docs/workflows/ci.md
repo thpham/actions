@@ -1,6 +1,8 @@
-# CI Workflow
+# Kotlin/Maven CI Workflow
 
-Build, test, lint, and optionally build multi-arch Docker preview images.
+Build, test, lint, and optionally build multi-arch Docker preview images for Kotlin/Maven/Spring Boot projects.
+
+**Workflow file:** `kotlin-mvn-ci.yml`
 
 ## Usage
 
@@ -20,13 +22,29 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Permissions required by the reusable workflow
+permissions:
+  contents: read
+  packages: write
+  pull-requests: write
+  actions: write
+
 jobs:
   ci:
-    uses: thpham/actions/.github/workflows/ci.yml@v1
+    uses: thpham/actions/.github/workflows/kotlin-mvn-ci.yml@main
     with:
       docker-image-name: ${{ github.repository }}/myservice-api
-    secrets: inherit
+    # GITHUB_TOKEN is automatically available - no secrets block needed
 ```
+
+## Permissions
+
+| Permission      | Purpose                                |
+| --------------- | -------------------------------------- |
+| `contents`      | Read - Checkout code                   |
+| `packages`      | Write - Push Docker images to GHCR     |
+| `pull-requests` | Write - Comment on PRs with image info |
+| `actions`       | Write - Cancel duplicate workflows     |
 
 ## Inputs
 

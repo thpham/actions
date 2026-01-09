@@ -1,7 +1,8 @@
-# Reusable CI workflow for Maven/Kotlin/Spring Boot projects
-# Features: Build, test, lint, and optional multi-arch Docker builds
+# Reusable CI workflow for Kotlin/Maven/Spring Boot projects
+# Stack: kotlin-mvn (Java 17+, Maven, Kotlin, Spring Boot)
+# Features: Build, test, lint (Spotless), and optional multi-arch Docker builds
 
-name: CI
+name: Kotlin/Maven CI
 
 on:
   workflow_call:

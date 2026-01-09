@@ -5,17 +5,29 @@ Automatically suggests backport labels for PRs containing fix or security commit
 ## Usage
 
 ```yaml
-name: Suggest Backports
+name: Suggest Backport Labels
 
-on:
+on: # zizmor: ignore[dangerous-triggers]
   pull_request_target:
     types: [opened, ready_for_review]
 
+# Permissions required by the reusable workflow
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
   suggest:
-    uses: thpham/actions/.github/workflows/suggest-backports.yml@v1
-    secrets: inherit
+    uses: thpham/actions/.github/workflows/suggest-backports.yml@main
+    # GITHUB_TOKEN is automatically available to reusable workflows
 ```
+
+## Permissions
+
+| Permission      | Purpose                         |
+| --------------- | ------------------------------- |
+| `contents`      | Read - Access release branches  |
+| `pull-requests` | Write - Add labels and comments |
 
 ## Inputs
 

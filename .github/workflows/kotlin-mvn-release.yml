@@ -1,7 +1,8 @@
-# Reusable workflow for releases
-# Handles Release Please, multi-arch Docker builds, and JReleaser distribution
+# Reusable release workflow for Kotlin/Maven/Spring Boot projects
+# Stack: kotlin-mvn (Java 17+, Maven, Kotlin, Spring Boot)
+# Features: Release Please, multi-arch Docker builds, JReleaser distribution
 
-name: Release
+name: Kotlin/Maven Release
 
 on:
   workflow_call:
