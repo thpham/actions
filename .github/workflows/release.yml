@@ -328,13 +328,20 @@ jobs:
           mvn -B deploy -DskipTests \
             -DaltDeploymentRepository=local::file:./"${STAGING_DIR}"
 
-      - name: Upload Build Artifacts
+      # Upload Docker artifacts separately (just the JAR for Docker builds)
+      - name: Upload Docker Artifacts
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: docker-artifacts
+          path: ${{ inputs.artifact-path }}
+          retention-days: 1
+
+      # Upload release artifacts for JReleaser (staging directory with all Maven artifacts)
+      - name: Upload Release Artifacts
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
           name: release-artifacts
-          path: |
-            ${{ inputs.artifact-path }}
-            ${{ inputs.staging-deploy-dir }}/
+          path: ${{ inputs.staging-deploy-dir }}/
           retention-days: 1
 
   # Native Multi-Architecture Docker Build (Matrix Strategy)
@@ -372,10 +379,10 @@ jobs:
           ref: ${{ needs.release-please.outputs.tag_name }}
           persist-credentials: false
 
-      - name: Download Build Artifacts
+      - name: Download Docker Artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
         with:
-          name: release-artifacts
+          name: docker-artifacts
           path: /tmp/build-artifacts
 
       - name: Flatten Artifacts to Docker Context
@@ -543,10 +550,16 @@ jobs:
           java-version: ${{ inputs.java-version }}
           distribution: ${{ inputs.java-distribution }}
 
-      - name: Download Build Artifacts
+      # Download both artifacts - staging-deploy for Maven artifacts, docker-artifacts for JAR files
+      - name: Download Release Artifacts
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
         with:
           name: release-artifacts
+
+      - name: Download Docker Artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        with:
+          name: docker-artifacts
 
       - name: Run JReleaser
         uses: jreleaser/release-action@90ac653bb9c79d11179e65d81499f3f34527dcd5 # v2
