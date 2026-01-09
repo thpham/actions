@@ -1,9 +1,31 @@
 # Reusable workflow for GitHub Actions workflow validation
 # Uses actionlint for syntax checking and zizmor for security scanning
+#
+# Can be used as:
+# 1. Reusable workflow (workflow_call) - called by other repos
+# 2. Direct trigger (push/pull_request) - lints this repo's workflows
 
 name: Lint Workflows
 
 on:
+  # Direct triggers for this repo
+  push:
+    branches:
+      - main
+      - master
+      - "release/**"
+    paths:
+      - ".github/workflows/**"
+      - ".github/actionlint.yaml"
+  pull_request:
+    branches:
+      - main
+      - master
+      - "release/**"
+    paths:
+      - ".github/workflows/**"
+      - ".github/actionlint.yaml"
+  # Reusable workflow trigger
   workflow_call:
     inputs:
       actionlint-config:
@@ -22,13 +44,17 @@ on:
         type: string
         default: "ubuntu-latest"
 
+concurrency:
+  group: lint-workflows-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   actionlint:
     name: actionlint
-    runs-on: ${{ inputs.runner }}
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
@@ -40,8 +66,8 @@ jobs:
 
   zizmor:
     name: zizmor (Security)
-    runs-on: ${{ inputs.runner }}
-    if: ${{ inputs.enable-zizmor }}
+    runs-on: ${{ inputs.runner || 'ubuntu-latest' }}
+    if: ${{ inputs.enable-zizmor == true || inputs.enable-zizmor == null }}
     permissions:
       contents: read
       actions: read
