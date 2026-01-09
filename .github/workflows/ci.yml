@@ -288,14 +288,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        platform: [linux/amd64, linux/arm64]
         include:
           - platform: linux/amd64
             runner: ${{ inputs.amd64-runner }}
           - platform: linux/arm64
             runner: ${{ inputs.arm64-runner }}
-            enabled: ${{ inputs.enable-arm64 }}
         exclude:
-          - enabled: false
+          - platform: ${{ inputs.enable-arm64 == false && 'linux/arm64' || 'exclude-nothing' }}
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
