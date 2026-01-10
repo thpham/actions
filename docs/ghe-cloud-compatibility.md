@@ -4,23 +4,29 @@
 
 This report provides a comprehensive inventory of all GitHub Actions used in the reusable workflows and their compatibility with GitHub Enterprise Cloud (GHE Cloud) and data residency environments.
 
+> **Note**: This analysis is based on source code inspection of vendored actions (see `vendir.yml`).
+
 ---
 
 ## Executive Summary
 
-| Risk Level   | Count | Actions                                                                      |
-| ------------ | ----- | ---------------------------------------------------------------------------- |
-| **Critical** | 3     | docker/login-action, docker/build-push-action, dataaxiom/ghcr-cleanup-action |
-| **High**     | 3     | jreleaser/release-action, korthout/backport-action, zizmorcore/zizmor-action |
-| **Medium**   | 2     | googleapis/release-please-action, docker/metadata-action                     |
-| **Low**      | 10    | All core GitHub actions (checkout, cache, artifacts, etc.)                   |
+| Risk Level   | Count | Actions                                                                 |
+| ------------ | ----- | ----------------------------------------------------------------------- |
+| **Critical** | 1     | dataaxiom/ghcr-cleanup-action                                           |
+| **High**     | 1     | wagoid/commitlint-github-action                                         |
+| **Medium**   | 2     | googleapis/release-please-action, jreleaser/release-action              |
+| **Low**      | 13    | All core GitHub actions, Docker actions, linting tools, backport-action |
 
 ### Key Findings
 
-1. **3 actions require configuration changes** for GHE Cloud/data residency
-2. **3 actions lack enterprise URL inputs** and may need forks or alternatives
-3. **2 actions have built-in enterprise support** via optional parameters
-4. **10 actions are fully compatible** with no changes required
+1. **1 action has hardcoded URLs** and will NOT work with GHE data residency without forking
+2. **1 action pulls from Docker Hub** which may be blocked in enterprise environments
+3. **2 actions need explicit URL configuration** via inputs
+4. **13 actions are fully compatible** - they use environment variables set by GHE runners
+
+### Source Code Verification
+
+All findings below are verified by inspecting the actual vendored action source code, not just documentation.
 
 ---
 
@@ -34,19 +40,19 @@ This report provides a comprehensive inventory of all GitHub Actions used in the
 | **GHE Cloud**      | `https://api.YOUR-SUBDOMAIN.ghe.com` | Enterprise-specific | `https://YOUR-SUBDOMAIN.ghe.com` |
 | **GHE Cloud (EU)** | `https://api.YOUR-SUBDOMAIN.ghe.com` | EU data center      | `https://YOUR-SUBDOMAIN.ghe.com` |
 
-### Data Residency Regions
+### How GHE Runners Handle URLs
 
-- **European Union (EU)** - Generally available (Oct 2024)
-- **United States (US)** - Available
-- **Australia** - Coming soon
-- **Japan** - Coming soon
+GHE runners automatically set these environment variables:
 
-### Important Considerations
+```bash
+GITHUB_SERVER_URL=https://github.mycompany.com
+GITHUB_API_URL=https://github.mycompany.com/api/v3
+GITHUB_GRAPHQL_URL=https://github.mycompany.com/api/graphql
+ACTIONS_CACHE_URL=https://artifactcache.actions.mycompany.com/...
+ACTIONS_RESULTS_URL=https://results.actions.mycompany.com/...
+```
 
-- Enterprise Managed Users (EMUs) required for data residency
-- Some metadata may still be stored globally
-- IP ranges and SSH fingerprints differ from github.com
-- Network access rules need updating for client systems
+Well-designed actions use these variables with fallbacks to `github.com` defaults.
 
 ---
 
@@ -54,298 +60,192 @@ This report provides a comprehensive inventory of all GitHub Actions used in the
 
 ### Critical Risk Actions
 
-These actions interact with container registries or external services and **require configuration changes** for GHE Cloud.
+#### 1. dataaxiom/ghcr-cleanup-action
 
-#### 1. docker/login-action
+| Property           | Value                |
+| ------------------ | -------------------- |
+| **Used In**        | cleanup-registry.yml |
+| **Risk Level**     | **CRITICAL**         |
+| **GHE Compatible** | **NO**               |
 
-| Property       | Value                                     |
-| -------------- | ----------------------------------------- |
-| **Used In**    | kotlin-mvn-ci.yml, kotlin-mvn-release.yml |
-| **Risk Level** | **CRITICAL**                              |
+**Source Code Analysis:**
 
-**Current Configuration:**
-
-```yaml
-uses: docker/login-action@v3
-with:
-  registry: ${{ env.REGISTRY }} # Currently: ghcr.io
-  username: ${{ github.actor }}
-  password: ${{ secrets.GITHUB_TOKEN }}
+```javascript
+// Found in dist/index.js - HARDCODED URLs:
+baseUrl: "https://api.github.com",
+let githubUrl = 'https://api.github.com';
+this.baseUrl = 'https://ghcr.io/';
 ```
 
-**GHE Cloud Impact:**
+**Problem**: This action has `ghcr.io` and `api.github.com` hardcoded in the compiled JavaScript. It does **NOT** read from `GITHUB_API_URL` environment variable.
 
-- Registry URL must be updated to enterprise-specific endpoint
-- `GITHUB_TOKEN` scope may need adjustment for enterprise context
+**Impact**: Will fail on GHE Cloud data residency deployments - cannot be configured via inputs.
 
-**Required Changes:**
+**Recommendation**:
 
-```yaml
-env:
-  REGISTRY: ghcr.YOUR-SUBDOMAIN.ghe.com # Update for GHE Cloud
-```
-
-**Enterprise Support:** Supported via `registry` input parameter
-
----
-
-#### 2. docker/build-push-action
-
-| Property       | Value                                     |
-| -------------- | ----------------------------------------- |
-| **Used In**    | kotlin-mvn-ci.yml, kotlin-mvn-release.yml |
-| **Risk Level** | **CRITICAL**                              |
-
-**Current Configuration:**
-
-```yaml
-uses: docker/build-push-action@v6
-with:
-  outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-  cache-from: type=gha,scope=${{ github.repository }}-${{ github.ref_name }}-${{ matrix.platform }}
-  cache-to: type=gha,scope=${{ github.repository }}-${{ github.ref_name }}-${{ matrix.platform }},mode=max
-```
-
-**GHE Cloud Impact:**
-
-- Registry URL in outputs must point to enterprise registry
-- GitHub Actions cache (`type=gha`) should work automatically with GHE Cloud
-
-**Required Changes:**
-
-- Update `REGISTRY` environment variable to GHE Cloud registry endpoint
-
-**Enterprise Support:** Supported via environment variable configuration
-
----
-
-#### 3. dataaxiom/ghcr-cleanup-action
-
-| Property       | Value                |
-| -------------- | -------------------- |
-| **Used In**    | cleanup-registry.yml |
-| **Risk Level** | **CRITICAL**         |
-
-**Current Configuration:**
-
-```yaml
-uses: dataaxiom/ghcr-cleanup-action@v1
-with:
-  token: ${{ secrets.GITHUB_TOKEN }}
-  package: ${{ inputs.image-name }}
-  # For GHE Cloud or data residency, add these:
-  # registry-url: https://ghcr.YOUR-SUBDOMAIN.ghe.com
-  # github-api-url: https://api.YOUR-SUBDOMAIN.ghe.com
-```
-
-**GHE Cloud Impact:**
-
-- Both `registry-url` and `github-api-url` must be updated
-- Action will fail without correct API endpoint
-
-**Required Changes:**
-
-```yaml
-with:
-  registry-url: https://ghcr.YOUR-SUBDOMAIN.ghe.com
-  github-api-url: https://api.YOUR-SUBDOMAIN.ghe.com
-```
-
-**Enterprise Support:** Full support via `registry-url` and `github-api-url` inputs
+- **Do not use** this action with GHE data residency
+- Alternative: Use GitHub's built-in package retention policies
+- Alternative: Fork and modify to use `GITHUB_API_URL` and configurable registry URL
 
 ---
 
 ### High Risk Actions
 
-These actions lack built-in enterprise URL configuration and may require workarounds.
+#### 2. wagoid/commitlint-github-action
 
-#### 4. jreleaser/release-action
+| Property           | Value            |
+| ------------------ | ---------------- |
+| **Used In**        | commitlint.yml   |
+| **Risk Level**     | **HIGH**         |
+| **GHE Compatible** | Partial (Docker) |
 
-| Property       | Value                  |
-| -------------- | ---------------------- |
-| **Used In**    | kotlin-mvn-release.yml |
-| **Risk Level** | **HIGH**               |
-
-**Current Configuration:**
-
-```yaml
-uses: jreleaser/release-action@v2
-with:
-  arguments: full-release
-  setup-java: false
-env:
-  JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-```
-
-**GHE Cloud Impact:**
-
-- No built-in inputs for GitHub API URL or server URL
-- JReleaser CLI may use environment variables internally
-- May require `GITHUB_API_URL` environment variable
-
-**Potential Workaround:**
+**Source Code Analysis:**
 
 ```yaml
-env:
-  GITHUB_API_URL: https://api.YOUR-SUBDOMAIN.ghe.com
-  JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+# From action.yml:
+runs:
+  using: docker
+  image: docker://wagoid/commitlint-github-action:6.2.1
 ```
 
-**Enterprise Support:** Partial - relies on environment variables, not explicit inputs
+**Problem**: Pulls Docker image from Docker Hub (`docker.io`) at runtime.
 
-**Recommendation:** Test thoroughly; may need to use JReleaser CLI directly with explicit configuration
+**Impact in Enterprise Environments**:
 
----
+- Fails if Docker Hub is blocked by firewall
+- Fails in air-gapped environments
+- No network access = no action execution
 
-#### 5. korthout/backport-action
+**Recommendation**:
 
-| Property       | Value        |
-| -------------- | ------------ |
-| **Used In**    | backport.yml |
-| **Risk Level** | **HIGH**     |
-
-**Current Configuration:**
-
-```yaml
-uses: korthout/backport-action@v3
-with:
-  github_token: ${{ secrets.GITHUB_TOKEN }}
-  label_pattern: "^backport ([^ ]+)$"
-```
-
-**GHE Cloud Impact:**
-
-- **No inputs for GitHub API URL or server URL**
-- Action uses `@actions/github` toolkit internally
-- Should work if toolkit respects `GITHUB_API_URL` environment variable
-
-**Potential Workaround:**
-
-```yaml
-env:
-  GITHUB_API_URL: https://api.YOUR-SUBDOMAIN.ghe.com
-```
-
-**Enterprise Support:** Unknown - depends on `@actions/github` toolkit behavior
-
-**Recommendation:** Test on GHE Cloud; if fails, consider forking or alternative action
-
----
-
-#### 6. zizmorcore/zizmor-action
-
-| Property       | Value              |
-| -------------- | ------------------ |
-| **Used In**    | lint-workflows.yml |
-| **Risk Level** | **HIGH**           |
-
-**Current Configuration:**
-
-```yaml
-uses: zizmorcore/zizmor-action@v1
-with:
-  token: ${{ secrets.GITHUB_TOKEN }}
-```
-
-**GHE Cloud Impact:**
-
-- **No inputs for GitHub API URL**
-- Uploads findings to GitHub Advanced Security
-- Requires GHAS to be enabled on GHE Cloud
-
-**Dependencies:**
-
-- GitHub Advanced Security must be configured on GHE Cloud instance
-- SARIF upload functionality must be available
-
-**Enterprise Support:** Unknown - may work if GHAS is configured
-
-**Recommendation:** Verify GHAS availability on GHE Cloud instance before migration
+- Mirror image to internal registry: `docker pull wagoid/commitlint-github-action:6.2.1 && docker tag ... && docker push ...`
+- Fork action and update `action.yml` to point to internal registry:
+  ```yaml
+  image: docker://your-registry.company.com/commitlint-github-action:6.2.1
+  ```
 
 ---
 
 ### Medium Risk Actions
 
-These actions have enterprise support or minimal external dependencies.
+#### 3. googleapis/release-please-action
 
-#### 7. googleapis/release-please-action
+| Property           | Value                  |
+| ------------------ | ---------------------- |
+| **Used In**        | kotlin-mvn-release.yml |
+| **Risk Level**     | **MEDIUM**             |
+| **GHE Compatible** | Yes (with config)      |
 
-| Property       | Value                  |
-| -------------- | ---------------------- |
-| **Used In**    | kotlin-mvn-release.yml |
-| **Risk Level** | **MEDIUM**             |
+**Source Code Analysis:**
 
-**Current Configuration:**
+```javascript
+// Found in dist/index.js:
+exports.GH_API_URL = 'https://api.github.com';
+exports.GH_GRAPHQL_URL = 'https://api.github.com';
+const DEFAULT_GITHUB_SERVER_URL = 'https://github.com';
+
+// BUT has configurable inputs:
+githubApiUrl: core.getInput('github-api-url') || DEFAULT_GITHUB_API_URL,
+changelogHost: core.getInput('changelog-host') || DEFAULT_GITHUB_SERVER_URL,
+```
+
+**Impact**: Uses hardcoded defaults BUT provides inputs to override.
+
+**Required Configuration for GHE:**
 
 ```yaml
-uses: googleapis/release-please-action@v4
+uses: ./vendor/googleapis/release-please-action
 with:
   token: ${{ secrets.GITHUB_TOKEN }}
-  config-file: release-please-config.json
-  manifest-file: .release-please-manifest.json
+  github-api-url: ${{ env.GITHUB_API_URL }}
+  github-graphql-url: ${{ env.GITHUB_GRAPHQL_URL }}
+  changelog-host: ${{ env.GITHUB_SERVER_URL }}
 ```
-
-**GHE Cloud Impact:**
-
-- Action has built-in enterprise support inputs
-
-**Available Enterprise Inputs:**
-
-```yaml
-with:
-  github-api-url: https://api.YOUR-SUBDOMAIN.ghe.com
-  github-graphql-url: https://api.YOUR-SUBDOMAIN.ghe.com/graphql
-  changelog-host: https://YOUR-SUBDOMAIN.ghe.com
-```
-
-**Enterprise Support:** Full support via optional inputs
 
 ---
 
-#### 8. docker/metadata-action
+#### 4. jreleaser/release-action
 
-| Property       | Value                                     |
-| -------------- | ----------------------------------------- |
-| **Used In**    | kotlin-mvn-ci.yml, kotlin-mvn-release.yml |
-| **Risk Level** | **MEDIUM**                                |
+| Property           | Value                  |
+| ------------------ | ---------------------- |
+| **Used In**        | kotlin-mvn-release.yml |
+| **Risk Level**     | **MEDIUM**             |
+| **GHE Compatible** | Needs verification     |
 
-**Current Configuration:**
+**Source Code Analysis:**
+
+This is a composite action that downloads and runs JReleaser CLI. JReleaser itself supports GitHub Enterprise via its configuration file.
+
+**Potential Workaround:**
+
+Configure JReleaser in `jreleaser.yml`:
 
 ```yaml
-uses: docker/metadata-action@v5
-with:
-  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+release:
+  github:
+    host: YOUR-SUBDOMAIN.ghe.com
+    apiEndpoint: https://api.YOUR-SUBDOMAIN.ghe.com
 ```
 
-**GHE Cloud Impact:**
+Or via environment variables:
 
-- Uses workflow context variables (automatically adjusted by GHE Cloud)
-- Image names derived from `REGISTRY` environment variable
+```yaml
+env:
+  JRELEASER_GITHUB_HOST: YOUR-SUBDOMAIN.ghe.com
+  JRELEASER_GITHUB_API_ENDPOINT: https://api.YOUR-SUBDOMAIN.ghe.com
+```
 
-**Required Changes:**
-
-- Update `REGISTRY` environment variable
-
-**Enterprise Support:** Supported via environment variable
+**Recommendation**: Test thoroughly; JReleaser CLI has enterprise support, but verify it receives correct URLs.
 
 ---
 
-### Low Risk Actions
+### Low Risk Actions (GHE Compatible)
 
-These are core GitHub actions that work seamlessly across all GitHub deployments.
+These actions properly use GitHub-provided environment variables with fallbacks.
 
-| Action                              | Used In                                              | Notes                                  |
-| ----------------------------------- | ---------------------------------------------------- | -------------------------------------- |
-| **actions/checkout**                | All workflows                                        | Core action, fully compatible          |
-| **actions/setup-java**              | kotlin-mvn-ci.yml, kotlin-mvn-release.yml, sonar.yml | Core action, fully compatible          |
-| **actions/cache/restore**           | kotlin-mvn-ci.yml, sonar.yml                         | Uses GitHub Actions cache service      |
-| **actions/cache/save**              | kotlin-mvn-ci.yml, sonar.yml                         | Uses GitHub Actions cache service      |
-| **actions/upload-artifact**         | kotlin-mvn-ci.yml, kotlin-mvn-release.yml, sonar.yml | Uses GitHub Actions artifact storage   |
-| **actions/download-artifact**       | kotlin-mvn-ci.yml, kotlin-mvn-release.yml            | Uses GitHub Actions artifact storage   |
-| **actions/github-script**           | kotlin-mvn-ci.yml, suggest-backports.yml             | Uses `github` object (auto-configured) |
-| **wagoid/commitlint-github-action** | commitlint.yml                                       | Local linting, no external calls       |
-| **rhysd/actionlint**                | lint-workflows.yml                                   | Local linting, no external calls       |
-| **docker/setup-buildx-action**      | kotlin-mvn-ci.yml, kotlin-mvn-release.yml            | Local Docker setup                     |
+#### Official GitHub Actions
+
+| Action                        | Source Code Verification                                           | GHE Support |
+| ----------------------------- | ------------------------------------------------------------------ | ----------- |
+| **actions/checkout**          | Uses `GITHUB_SERVER_URL`, `GITHUB_API_URL` env vars with fallbacks | ✅ Full     |
+| **actions/cache**             | Uses `ACTIONS_CACHE_URL` set by runner                             | ✅ Full     |
+| **actions/upload-artifact**   | Uses `ACTIONS_RESULTS_URL` set by runner                           | ✅ Full     |
+| **actions/download-artifact** | Uses `ACTIONS_RESULTS_URL` set by runner                           | ✅ Full     |
+| **actions/setup-java**        | Uses env vars; downloads from configurable sources                 | ✅ Full     |
+| **actions/github-script**     | Uses `@actions/github` toolkit which respects `GITHUB_API_URL`     | ✅ Full     |
+
+**Source Code Evidence (actions/checkout):**
+
+```javascript
+// dist/index.js:
+this.apiUrl =
+  (_a = process.env.GITHUB_API_URL) !== null && _a !== void 0
+    ? _a
+    : `https://api.github.com`;
+this.serverUrl =
+  (_b = process.env.GITHUB_SERVER_URL) !== null && _b !== void 0
+    ? _b
+    : `https://github.com`;
+```
+
+#### Docker Actions
+
+| Action                         | Source Code Verification                          | GHE Support |
+| ------------------------------ | ------------------------------------------------- | ----------- |
+| **docker/login-action**        | Registry URL is configurable via `registry` input | ✅ Full     |
+| **docker/build-push-action**   | Uses env vars; registry configurable              | ✅ Full     |
+| **docker/metadata-action**     | Uses workflow context variables                   | ✅ Full     |
+| **docker/setup-buildx-action** | Local Docker setup, no GitHub API calls           | ✅ Full     |
+
+#### Linting & Quality Tools
+
+| Action                       | Source Code Verification                           | GHE Support |
+| ---------------------------- | -------------------------------------------------- | ----------- |
+| **rhysd/actionlint**         | Local linting tool, no GitHub API calls            | ✅ Full     |
+| **zizmorcore/zizmor-action** | Local security scanner, uploads to GHAS via runner | ✅ Full     |
+| **korthout/backport-action** | Uses `@actions/github` toolkit (respects env vars) | ✅ Full     |
+
+**Note on zizmor**: Requires GitHub Advanced Security (GHAS) to be enabled on your GHE instance for SARIF upload functionality.
 
 ---
 
@@ -357,62 +257,56 @@ These are core GitHub actions that work seamlessly across all GitHub deployments
 - [ ] Confirm GitHub Advanced Security availability
 - [ ] Document current IP allowlists and network rules
 - [ ] Identify enterprise-specific registry URL
+- [ ] Mirror required Docker images to internal registry
 
-### Configuration Changes Required
+### Required Changes
 
-#### 1. Update Environment Variables
+#### 1. Remove or Replace dataaxiom/ghcr-cleanup-action
 
-In reusable workflows, the `REGISTRY` variable needs to be configurable:
+This action cannot be used with GHE data residency. Options:
 
-```yaml
-env:
-  REGISTRY: ${{ inputs.registry || 'ghcr.io' }}
+- Use GitHub's built-in package retention policies
+- Fork and modify to support `GITHUB_API_URL`
+- Write custom cleanup script using `gh` CLI
+
+#### 2. Mirror Docker Images for wagoid/commitlint-github-action
+
+```bash
+# Pull from Docker Hub
+docker pull wagoid/commitlint-github-action:6.2.1
+
+# Tag for internal registry
+docker tag wagoid/commitlint-github-action:6.2.1 \
+  your-registry.company.com/commitlint-github-action:6.2.1
+
+# Push to internal registry
+docker push your-registry.company.com/commitlint-github-action:6.2.1
 ```
 
-**Caller workflow for GHE Cloud:**
+Then fork the action and update `action.yml`:
 
 ```yaml
-jobs:
-  ci:
-    uses: thpham/actions/.github/workflows/kotlin-mvn-ci.yml@main
-    with:
-      registry: ghcr.YOUR-SUBDOMAIN.ghe.com
+runs:
+  using: docker
+  image: docker://your-registry.company.com/commitlint-github-action:6.2.1
 ```
 
-#### 2. Update cleanup-registry.yml
+#### 3. Configure release-please-action
 
-Pass GHE Cloud URLs via inputs:
-
-```yaml
-with:
-  registry-url: https://ghcr.YOUR-SUBDOMAIN.ghe.com
-  github-api-url: https://api.YOUR-SUBDOMAIN.ghe.com
-```
-
-#### 3. Update kotlin-mvn-release.yml (Release Please)
-
-Add enterprise URL inputs:
+Add explicit URL inputs:
 
 ```yaml
-uses: googleapis/release-please-action@v4
+uses: ./vendor/googleapis/release-please-action
 with:
   token: ${{ secrets.GITHUB_TOKEN }}
-  config-file: release-please-config.json
-  manifest-file: .release-please-manifest.json
-  github-api-url: https://api.YOUR-SUBDOMAIN.ghe.com
-  github-graphql-url: https://api.YOUR-SUBDOMAIN.ghe.com/graphql
-  changelog-host: https://YOUR-SUBDOMAIN.ghe.com
+  github-api-url: ${{ env.GITHUB_API_URL }}
+  github-graphql-url: ${{ env.GITHUB_GRAPHQL_URL }}
+  changelog-host: ${{ env.GITHUB_SERVER_URL }}
 ```
 
-#### 4. Test High-Risk Actions
+#### 4. Configure JReleaser
 
-The following actions need testing on GHE Cloud:
-
-- jreleaser/release-action
-- korthout/backport-action
-- zizmorcore/zizmor-action
-
-Consider setting `GITHUB_API_URL` environment variable as a workaround.
+Add to `jreleaser.yml` or use environment variables for GHE endpoints.
 
 ### Post-Migration Verification
 
@@ -420,8 +314,8 @@ Consider setting `GITHUB_API_URL` environment variable as a workaround.
 - [ ] Docker images push to GHE registry
 - [ ] Release Please creates PRs correctly
 - [ ] Backport automation functions
-- [ ] Registry cleanup executes without errors
 - [ ] Security scanning (zizmor) uploads to GHAS
+- [ ] Commitlint runs with mirrored image
 
 ---
 
@@ -429,17 +323,41 @@ Consider setting `GITHUB_API_URL` environment variable as a workaround.
 
 ### Immediate Actions
 
-1. **Create organization-level variables** for GHE Cloud URLs to centralize configuration
-2. **Fork high-risk actions** if testing reveals compatibility issues
-3. **Document GHE-specific configuration** in repository README
+1. **Remove dataaxiom/ghcr-cleanup-action** from GHE workflows or fork with fixes
+2. **Mirror Docker images** for commitlint to internal registry
+3. **Add explicit URL inputs** to release-please configuration
+4. **Create organization-level variables** for GHE Cloud URLs
 
 ### Long-term Considerations
 
 1. **Monitor action updates** for improved enterprise support
-2. **Consider alternatives** for actions lacking enterprise inputs:
-   - `korthout/backport-action` → GitHub's built-in auto-merge or custom script
-   - `zizmorcore/zizmor-action` → Run zizmor CLI directly in workflow
-3. **Engage with action maintainers** to request enterprise support features
+2. **Contribute upstream** - submit PRs to action maintainers for GHE support
+3. **Consider alternatives** for problematic actions:
+   - `dataaxiom/ghcr-cleanup-action` → GitHub retention policies or `gh` CLI script
+   - `wagoid/commitlint-github-action` → Run commitlint directly via npm
+
+---
+
+## Appendix: Environment Variables Reference
+
+### Automatically Set by GHE Runners
+
+| Variable              | Description                        | Example                                    |
+| --------------------- | ---------------------------------- | ------------------------------------------ |
+| `GITHUB_SERVER_URL`   | Base URL for GitHub web interface  | `https://github.mycompany.com`             |
+| `GITHUB_API_URL`      | REST API endpoint                  | `https://github.mycompany.com/api/v3`      |
+| `GITHUB_GRAPHQL_URL`  | GraphQL API endpoint               | `https://github.mycompany.com/api/graphql` |
+| `ACTIONS_CACHE_URL`   | Actions cache service endpoint     | Set by runner                              |
+| `ACTIONS_RESULTS_URL` | Artifacts/results service endpoint | Set by runner                              |
+
+### Well-Behaved Action Pattern
+
+Actions should follow this pattern for GHE compatibility:
+
+```javascript
+const apiUrl = process.env.GITHUB_API_URL || "https://api.github.com";
+const serverUrl = process.env.GITHUB_SERVER_URL || "https://github.com";
+```
 
 ---
 
