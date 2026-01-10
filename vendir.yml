@@ -1,0 +1,197 @@
+apiVersion: vendir.k14s.io/v1alpha1
+kind: Config
+
+# Minimum CLI version required
+minimumRequiredVersion: 0.35.0
+
+directories:
+  - path: vendor/
+    contents:
+      # ─────────────────────────────────────────────────────────────────────────
+      # GitHub Official Actions (JavaScript/Node)
+      # Required: action.yml + dist/
+      # ─────────────────────────────────────────────────────────────────────────
+
+      # actions/checkout@v6
+      - path: actions/checkout
+        git:
+          url: https://github.com/actions/checkout
+          ref: 8e8c483db84b4bee98b60c0593521ed34d9990e8
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # actions/setup-java@v5
+      - path: actions/setup-java
+        git:
+          url: https://github.com/actions/setup-java
+          ref: f2beeb24e141e01a676f977032f5a29d81c9e27e
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # actions/cache@v4 (includes restore and save subactions)
+      - path: actions/cache
+        git:
+          url: https://github.com/actions/cache
+          ref: 9255dc7a253b0ccc959486e2bca901246202afeb
+        includePaths:
+          - action.yml
+          - dist/**
+          - restore/action.yml
+          - save/action.yml
+
+      # actions/upload-artifact@v6
+      - path: actions/upload-artifact
+        git:
+          url: https://github.com/actions/upload-artifact
+          ref: b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # actions/download-artifact@v4
+      - path: actions/download-artifact
+        git:
+          url: https://github.com/actions/download-artifact
+          ref: 37930b1c2abaa49bbe596cd826c3c89aef350131
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # actions/github-script@v7
+      - path: actions/github-script
+        git:
+          url: https://github.com/actions/github-script
+          ref: ed597411d8f924073f98dfc5c65a23a2325f34cd
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Docker Actions (JavaScript/Node)
+      # Required: action.yml + dist/
+      # ─────────────────────────────────────────────────────────────────────────
+
+      # docker/setup-buildx-action@v3
+      - path: docker/setup-buildx-action
+        git:
+          url: https://github.com/docker/setup-buildx-action
+          ref: 8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # docker/login-action@v3
+      - path: docker/login-action
+        git:
+          url: https://github.com/docker/login-action
+          ref: 5e57cd118135c172c3672efd75eb46360885c0ef
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # docker/metadata-action@v5
+      - path: docker/metadata-action
+        git:
+          url: https://github.com/docker/metadata-action
+          ref: c299e40c65443455700f0fdfc63efafe5b349051
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # docker/build-push-action@v6.18.0
+      - path: docker/build-push-action
+        git:
+          url: https://github.com/docker/build-push-action
+          ref: 263435318d21b8e681c14492fe198d362a7d2c83
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Release & Distribution Actions
+      # ─────────────────────────────────────────────────────────────────────────
+
+      # googleapis/release-please-action@v4 (JavaScript/Node)
+      - path: googleapis/release-please-action
+        git:
+          url: https://github.com/googleapis/release-please-action
+          ref: 16a9c90856f42705d54a6fda1823352bdc62cf38
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # jreleaser/release-action@v2 (Composite action)
+      # Required: action.yml + get_jreleaser.java script
+      - path: jreleaser/release-action
+        git:
+          url: https://github.com/jreleaser/release-action
+          ref: 90ac653bb9c79d11179e65d81499f3f34527dcd5
+        includePaths:
+          - action.yml
+          - get_jreleaser.java
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Git & Backport Actions
+      # ─────────────────────────────────────────────────────────────────────────
+
+      # korthout/backport-action@v3.1.0 (JavaScript/Node)
+      - path: korthout/backport-action
+        git:
+          url: https://github.com/korthout/backport-action
+          ref: c656f5d5851037b2b38fb5db2691a03fa229e3b2
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Code Quality & Linting Actions
+      # ─────────────────────────────────────────────────────────────────────────
+
+      # wagoid/commitlint-github-action@v6.2.1 (Docker action - uses remote image)
+      # Required: action.yml only (Docker image is pulled at runtime)
+      - path: wagoid/commitlint-github-action
+        git:
+          url: https://github.com/wagoid/commitlint-github-action
+          ref: b948419dd99f3fd78a6548d48f94e3df7f6bf3ed
+        includePaths:
+          - action.yml
+
+      # rhysd/actionlint@v1.7.10 (Docker-based action - builds from source)
+      # Required: Dockerfile + Go source code for Docker build
+      # NOTE: This is a large vendor (~80MB) due to Go source requirements
+      - path: rhysd/actionlint
+        git:
+          url: https://github.com/rhysd/actionlint
+          ref: 0933c147c9d6587653d45fdcb4c497c57a65f9af
+        includePaths:
+          - Dockerfile
+          - "*.go"
+          - go.mod
+          - go.sum
+          - cmd/**
+          - .github/actionlint-matcher.json
+
+      # zizmorcore/zizmor-action@v0.3.0 (Composite action)
+      # Required: action.yml + action.sh script
+      - path: zizmorcore/zizmor-action
+        git:
+          url: https://github.com/zizmorcore/zizmor-action
+          ref: e639db99335bc9038abc0e066dfcd72e23d26fb4
+        includePaths:
+          - action.yml
+          - action.sh
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Container Registry Actions
+      # ─────────────────────────────────────────────────────────────────────────
+
+      # dataaxiom/ghcr-cleanup-action@v1.0.16 (JavaScript/Node)
+      - path: dataaxiom/ghcr-cleanup-action
+        git:
+          url: https://github.com/dataaxiom/ghcr-cleanup-action
+          ref: cd0cdb900b5dbf3a6f2cc869f0dbb0b8211f50c4
+        includePaths:
+          - action.yml
+          - dist/**

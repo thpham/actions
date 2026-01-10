@@ -1,0 +1,107 @@
+apiVersion: vendir.k14s.io/v1alpha1
+directories:
+- contents:
+  - git:
+      commitTitle: Clarify v6 README (#2328)
+      sha: 8e8c483db84b4bee98b60c0593521ed34d9990e8
+      tags:
+      - v6
+    path: actions/checkout
+  - git:
+      commitTitle: Bump actions/publish-action from 0.3.0 to 0.4.0 (#912)...
+      sha: f2beeb24e141e01a676f977032f5a29d81c9e27e
+      tags:
+      - v5
+    path: actions/setup-java
+  - git:
+      commitTitle: 'Merge pull request #1686 from actions/cache-v5.0.1-release...'
+      sha: 9255dc7a253b0ccc959486e2bca901246202afeb
+      tags:
+      - v5
+    path: actions/cache
+  - git:
+      commitTitle: 'Merge pull request #745 from actions/upload-artifact-v6-release...'
+      sha: b7c566a772e6b6bfb58ed0dc250532a479d7789f
+      tags:
+      - v6
+    path: actions/upload-artifact
+  - git:
+      commitTitle: 'Merge pull request #452 from actions/download-artifact-v7-release...'
+      sha: 37930b1c2abaa49bbe596cd826c3c89aef350131
+      tags:
+      - v7
+    path: actions/download-artifact
+  - git:
+      commitTitle: 'Merge pull request #653 from actions/sneha-krip/readme-for-v8...'
+      sha: ed597411d8f924073f98dfc5c65a23a2325f34cd
+      tags:
+      - v8
+    path: actions/github-script
+  - git:
+      commitTitle: 'Merge pull request #455 from crazy-max/install-deprecated...'
+      sha: 8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      tags:
+      - v3
+    path: docker/setup-buildx-action
+  - git:
+      commitTitle: 'Merge pull request #890 from docker/dependabot/npm_and_yarn/aws-sdk-dependencies-0da3cd129b...'
+      sha: 5e57cd118135c172c3672efd75eb46360885c0ef
+      tags:
+      - v3
+    path: docker/login-action
+  - git:
+      commitTitle: 'Merge pull request #569 from docker/dependabot/npm_and_yarn/docker/actions-toolkit-0.68.0...'
+      sha: c299e40c65443455700f0fdfc63efafe5b349051
+      tags:
+      - v5
+    path: docker/metadata-action
+  - git:
+      commitTitle: 'Merge pull request #1381 from docker/dependabot/npm_and_yarn/docker/actions-toolkit-0.62.1...'
+      sha: 263435318d21b8e681c14492fe198d362a7d2c83
+      tags:
+      - v6
+    path: docker/build-push-action
+  - git:
+      commitTitle: 'chore(main): release 4.4.0 (#1156)...'
+      sha: 16a9c90856f42705d54a6fda1823352bdc62cf38
+      tags:
+      - v4
+    path: googleapis/release-please-action
+  - git:
+      commitTitle: Update GH actions
+      sha: 90ac653bb9c79d11179e65d81499f3f34527dcd5
+      tags:
+      - 2.5.0
+    path: jreleaser/release-action
+  - git:
+      commitTitle: 'dist: release 4.0.1...'
+      sha: c656f5d5851037b2b38fb5db2691a03fa229e3b2
+      tags:
+      - v4
+    path: korthout/backport-action
+  - git:
+      commitTitle: 'chore(release): publish 6.2.1 [skip-ci]'
+      sha: b948419dd99f3fd78a6548d48f94e3df7f6bf3ed
+      tags:
+      - v6
+    path: wagoid/commitlint-github-action
+  - git:
+      commitTitle: bump up version to v1.7.10
+      sha: 0933c147c9d6587653d45fdcb4c497c57a65f9af
+      tags:
+      - v1.7.10
+    path: rhysd/actionlint
+  - git:
+      commitTitle: remove mise.toml (#57)
+      sha: e639db99335bc9038abc0e066dfcd72e23d26fb4
+      tags:
+      - v0.3.0
+    path: zizmorcore/zizmor-action
+  - git:
+      commitTitle: fix typo
+      sha: cd0cdb900b5dbf3a6f2cc869f0dbb0b8211f50c4
+      tags:
+      - v1
+    path: dataaxiom/ghcr-cleanup-action
+  path: vendor
+kind: LockConfig
