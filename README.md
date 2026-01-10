@@ -13,13 +13,14 @@ Reusable GitHub Actions workflows for organization-wide standardization, organiz
 ```
 actions/
 ├── .github/workflows/           # Reusable workflows
-│   ├── ci.yml
-│   ├── release.yml
+│   ├── kotlin-mvn-ci.yml
+│   ├── kotlin-mvn-release.yml
 │   ├── backport.yml
 │   ├── suggest-backports.yml
 │   ├── commitlint.yml
 │   ├── sonar.yml
-│   ├── cleanup-registry.yml
+│   ├── cleanup-ghcr.yml
+│   ├── cleanup-oci.yml
 │   └── lint-workflows.yml
 ├── configs/
 │   └── kotlin-mvn/              # Stack-specific config templates
@@ -62,7 +63,7 @@ permissions:
 
 jobs:
   ci:
-    uses: thpham/actions/.github/workflows/ci.yml@main
+    uses: thpham/actions/.github/workflows/kotlin-mvn-ci.yml@main
     with:
       docker-image-name: ${{ github.repository }}/myservice-api
     # GITHUB_TOKEN is automatically available - no secrets block needed
@@ -88,7 +89,7 @@ permissions:
 
 jobs:
   release:
-    uses: thpham/actions/.github/workflows/release.yml@main
+    uses: thpham/actions/.github/workflows/kotlin-mvn-release.yml@main
     with:
       docker-image-name: ${{ github.repository }}/myservice-api
     # GITHUB_TOKEN is automatically available
@@ -101,16 +102,17 @@ jobs:
 
 ### All Available Workflows (kotlin-mvn)
 
-| Workflow                | Purpose                             | Trigger                      |
-| ----------------------- | ----------------------------------- | ---------------------------- |
-| `ci.yml`                | Build, test, lint, Docker preview   | push, pull_request           |
-| `release.yml`           | Release Please + Docker + JReleaser | push to main/release/\*\*    |
-| `backport.yml`          | Auto cherry-pick PRs                | pull_request_target [closed] |
-| `suggest-backports.yml` | Suggest backport labels             | pull_request_target [opened] |
-| `commitlint.yml`        | Conventional Commits                | pull_request                 |
-| `sonar.yml`             | Code quality analysis               | push, pull_request           |
-| `cleanup-registry.yml`  | Container image cleanup             | PR close, schedule           |
-| `lint-workflows.yml`    | Workflow validation                 | push/PR to workflows/\*\*    |
+| Workflow                 | Purpose                             | Trigger                      |
+| ------------------------ | ----------------------------------- | ---------------------------- |
+| `kotlin-mvn-ci.yml`      | Build, test, lint, Docker preview   | push, pull_request           |
+| `kotlin-mvn-release.yml` | Release Please + Docker + JReleaser | push to main/release/\*\*    |
+| `backport.yml`           | Auto cherry-pick PRs                | pull_request_target [closed] |
+| `suggest-backports.yml`  | Suggest backport labels             | pull_request_target [opened] |
+| `commitlint.yml`         | Conventional Commits                | pull_request                 |
+| `sonar.yml`              | Code quality analysis               | push, pull_request           |
+| `cleanup-ghcr.yml`       | GHCR container image cleanup        | PR close, schedule           |
+| `cleanup-oci.yml`        | Multi-registry image cleanup        | schedule, workflow_dispatch  |
+| `lint-workflows.yml`     | Workflow validation                 | push/PR to workflows/\*\*    |
 
 **Full documentation:** [Workflow Reference](docs/README.md) | [Migration Guide](docs/kotlin-mvn/migration.md)
 

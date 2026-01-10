@@ -1,11 +1,15 @@
-# Cleanup Registry Workflow
+# GHCR Cleanup Workflow
 
-Automated container image lifecycle management for GitHub Container Registry.
+Automated container image lifecycle management for GitHub Container Registry (GHCR).
+
+**Workflow file:** `cleanup-ghcr.yml`
+
+> **Note:** This workflow is specific to GitHub Container Registry (ghcr.io). For other OCI-compliant registries (ECR, ACR, GCR, Harbor), see [cleanup-oci.md](cleanup-oci.md).
 
 ## Usage
 
 ```yaml
-name: Cleanup Container Registry
+name: Cleanup GHCR Images
 
 on:
   pull_request:
@@ -21,7 +25,7 @@ permissions:
 
 jobs:
   cleanup:
-    uses: thpham/actions/.github/workflows/cleanup-registry.yml@main
+    uses: thpham/actions/.github/workflows/cleanup-ghcr.yml@main
     with:
       image-name: ${{ github.event.repository.name }}/myproject-api
     # GITHUB_TOKEN is automatically available to reusable workflows

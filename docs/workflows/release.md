@@ -38,7 +38,7 @@ jobs:
 | Permission      | Purpose                                     |
 | --------------- | ------------------------------------------- |
 | `contents`      | Write - Create tags, branches, and releases |
-| `packages`      | Write - Push Docker images to GHCR          |
+| `packages`      | Write - Push Docker images to registry      |
 | `pull-requests` | Write - Create/merge release PRs            |
 | `actions`       | Write - Cancel duplicate workflows          |
 

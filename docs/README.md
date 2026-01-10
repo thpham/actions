@@ -19,7 +19,8 @@ This directory contains detailed documentation for each reusable workflow.
 | [suggest-backports.yml](workflows/suggest-backports.md) | Backport label suggestions    | [View](workflows/suggest-backports.md) |
 | [commitlint.yml](workflows/commitlint.md)               | Conventional Commits linting  | [View](workflows/commitlint.md)        |
 | [sonar.yml](workflows/sonar.md)                         | SonarQube/SonarCloud analysis | [View](workflows/sonar.md)             |
-| [cleanup-registry.yml](workflows/cleanup-registry.md)   | Container image cleanup       | [View](workflows/cleanup-registry.md)  |
+| [cleanup-ghcr.yml](workflows/cleanup-ghcr.md)           | GHCR container image cleanup  | [View](workflows/cleanup-ghcr.md)      |
+| [cleanup-oci.yml](workflows/cleanup-oci.md)             | Multi-registry image cleanup  | [View](workflows/cleanup-oci.md)       |
 | [lint-workflows.yml](workflows/lint-workflows.md)       | Workflow validation           | [View](workflows/lint-workflows.md)    |
 
 ## Migration Guide
@@ -63,7 +64,8 @@ See the [Migration Guide](migration.md) for instructions on migrating from exist
 │  ├── suggest-backports.yml  (reusable, stack-agnostic)                │
 │  ├── commitlint.yml         (reusable, stack-agnostic)                │
 │  ├── sonar.yml              (reusable, stack-agnostic)                │
-│  ├── cleanup-registry.yml   (reusable, stack-agnostic)                │
+│  ├── cleanup-ghcr.yml       (reusable, stack-agnostic, GHCR only)     │
+│  ├── cleanup-oci.yml        (reusable, stack-agnostic, multi-registry)│
 │  └── lint-workflows.yml     (reusable, stack-agnostic)                │
 ├───────────────────────────────────────────────────────────────────────┤
 │  configs/kotlin-mvn/                                                  │
@@ -139,7 +141,8 @@ jobs:
 | `backport.yml`           | `contents: write`, `pull-requests: write`                                      |
 | `suggest-backports.yml`  | `contents: read`, `pull-requests: write`                                       |
 | `commitlint.yml`         | `contents: read`, `pull-requests: read`                                        |
-| `cleanup-registry.yml`   | `packages: write`, `pull-requests: read`                                       |
+| `cleanup-ghcr.yml`       | `packages: write`, `pull-requests: read`                                       |
+| `cleanup-oci.yml`        | `contents: read`, `id-token: write`, `pull-requests: read`                     |
 | `lint-workflows.yml`     | `contents: read`, `actions: read`, `security-events: write`                    |
 
 ### 2. Avoid `secrets: inherit`
@@ -167,7 +170,8 @@ Most workflows only need `GITHUB_TOKEN`, which is **automatically available** to
 | `backport.yml`           | None                               | `GITHUB_TOKEN` is automatic     |
 | `suggest-backports.yml`  | None                               | `GITHUB_TOKEN` is automatic     |
 | `commitlint.yml`         | None                               | No secrets needed               |
-| `cleanup-registry.yml`   | None                               | `GITHUB_TOKEN` is automatic     |
+| `cleanup-ghcr.yml`       | None                               | `GITHUB_TOKEN` is automatic     |
+| `cleanup-oci.yml`        | ACR/Harbor/Quay-specific           | See workflow documentation      |
 | `lint-workflows.yml`     | None                               | No secrets needed               |
 
 ### 4. Example: Secure Caller Workflow

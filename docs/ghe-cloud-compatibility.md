@@ -64,7 +64,7 @@ Well-designed actions use these variables with fallbacks to `github.com` default
 
 | Property           | Value                |
 | ------------------ | -------------------- |
-| **Used In**        | cleanup-registry.yml |
+| **Used In**        | cleanup-ghcr.yml     |
 | **Risk Level**     | **CRITICAL**         |
 | **GHE Compatible** | **NO**               |
 
@@ -261,13 +261,13 @@ this.serverUrl =
 
 ### Required Changes
 
-#### 1. Remove or Replace dataaxiom/ghcr-cleanup-action
+#### 1. Use cleanup-oci.yml Instead of cleanup-ghcr.yml
 
-This action cannot be used with GHE data residency. Options:
+The `cleanup-ghcr.yml` workflow uses `dataaxiom/ghcr-cleanup-action` which has hardcoded `ghcr.io` URLs and cannot work with GHE data residency. Options:
 
+- **Recommended:** Use `cleanup-oci.yml` instead, which uses `regctl` and supports any OCI-compliant registry
 - Use GitHub's built-in package retention policies
-- Fork and modify to support `GITHUB_API_URL`
-- Write custom cleanup script using `gh` CLI
+- Fork and modify `dataaxiom/ghcr-cleanup-action` to use `GITHUB_API_URL`
 
 #### 2. Mirror Docker Images for wagoid/commitlint-github-action
 
@@ -323,7 +323,7 @@ Add to `jreleaser.yml` or use environment variables for GHE endpoints.
 
 ### Immediate Actions
 
-1. **Remove dataaxiom/ghcr-cleanup-action** from GHE workflows or fork with fixes
+1. **Use cleanup-oci.yml** instead of cleanup-ghcr.yml for GHE data residency, or fork dataaxiom/ghcr-cleanup-action with fixes
 2. **Mirror Docker images** for commitlint to internal registry
 3. **Add explicit URL inputs** to release-please configuration
 4. **Create organization-level variables** for GHE Cloud URLs

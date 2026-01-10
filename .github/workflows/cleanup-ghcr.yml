@@ -1,7 +1,10 @@
-# Reusable workflow for container registry cleanup
+# Reusable workflow for GitHub Container Registry (GHCR) cleanup
 # Handles PR image cleanup and scheduled bulk cleanup
+#
+# NOTE: This workflow is specific to GHCR (ghcr.io).
+# For other OCI registries (ECR, ACR, GCR, Harbor), use cleanup-oci.yml
 
-name: Cleanup Container Registry
+name: Cleanup GHCR Images
 
 on:
   workflow_call:
@@ -42,8 +45,11 @@ on:
 # - workflow_dispatch for manual cleanup
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GHCR Cleanup Strategy
+# GHCR-Specific Cleanup Strategy
 # ─────────────────────────────────────────────────────────────────────────────
+# This workflow is specific to GitHub Container Registry (ghcr.io).
+# For other OCI registries (ECR, ACR, GCR, Harbor), use cleanup-oci.yml
+#
 # Uses dataaxiom/ghcr-cleanup-action which:
 # - Properly handles multi-architecture images (preserves manifest integrity)
 # - Supports wildcard and regex patterns for flexible tag matching

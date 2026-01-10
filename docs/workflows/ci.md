@@ -42,7 +42,7 @@ jobs:
 | Permission      | Purpose                                |
 | --------------- | -------------------------------------- |
 | `contents`      | Read - Checkout code                   |
-| `packages`      | Write - Push Docker images to GHCR     |
+| `packages`      | Write - Push Docker images to registry |
 | `pull-requests` | Write - Comment on PRs with image info |
 | `actions`       | Write - Cancel duplicate workflows     |
 
