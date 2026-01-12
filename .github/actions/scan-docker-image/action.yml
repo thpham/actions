@@ -88,6 +88,9 @@ runs:
     - name: Run Trivy Vulnerability Scan
       id: trivy-scan
       uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+      env:
+        # Tell Trivy which platform to expect for the single-arch image
+        TRIVY_PLATFORM: ${{ inputs.platform }}
       with:
         image-ref: "${{ inputs.registry }}/${{ inputs.image-name }}@${{ inputs.digest }}"
         format: "sarif"
@@ -100,6 +103,8 @@ runs:
 
     - name: Run Trivy (Table Output)
       uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+      env:
+        TRIVY_PLATFORM: ${{ inputs.platform }}
       with:
         image-ref: "${{ inputs.registry }}/${{ inputs.image-name }}@${{ inputs.digest }}"
         format: "table"
@@ -110,6 +115,8 @@ runs:
     - name: Generate SBOM
       if: inputs.sbom-enabled == 'true'
       uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+      env:
+        TRIVY_PLATFORM: ${{ inputs.platform }}
       with:
         image-ref: "${{ inputs.registry }}/${{ inputs.image-name }}@${{ inputs.digest }}"
         format: "${{ inputs.sbom-format }}"
