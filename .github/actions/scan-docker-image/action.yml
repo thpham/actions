@@ -1,0 +1,202 @@
+name: "Scan Docker Image"
+description: "Scan Docker image for vulnerabilities with Trivy, upload SARIF, optionally generate SBOM"
+author: "thpham"
+
+inputs:
+  registry:
+    description: "Container registry (e.g., ghcr.io)"
+    required: true
+  image-name:
+    description: "Full image name without tag"
+    required: true
+  digest:
+    description: "Image digest to scan (sha256:...)"
+    required: true
+  platform:
+    description: "Platform for artifact naming (e.g., linux/amd64)"
+    required: true
+  severity-threshold:
+    description: "Minimum severity to report (e.g., CRITICAL,HIGH)"
+    required: false
+    default: "CRITICAL,HIGH"
+  fail-on-vuln:
+    description: "Fail if vulnerabilities found at threshold"
+    required: false
+    default: "false"
+  ignore-unfixed:
+    description: "Ignore unfixed vulnerabilities"
+    required: false
+    default: "true"
+  skip-dirs:
+    description: "Directories to skip (comma-separated)"
+    required: false
+    default: ""
+  sbom-enabled:
+    description: "Generate SBOM"
+    required: false
+    default: "false"
+  sbom-format:
+    description: "SBOM format: 'cyclonedx' or 'spdx'"
+    required: false
+    default: "cyclonedx"
+  sbom-attestation:
+    description: "Attest SBOM to per-architecture image digest (recommended for SLSA compliance)"
+    required: false
+    default: "false"
+  sarif-category-prefix:
+    description: "SARIF upload category prefix (e.g., 'trivy' or 'trivy-release')"
+    required: false
+    default: "trivy"
+  registry-username:
+    description: "Registry username for authentication"
+    required: false
+    default: ""
+  registry-password:
+    description: "Registry password/token for authentication"
+    required: true
+
+outputs:
+  scan-result:
+    description: "'passed', 'failed', or 'warning'"
+    value: ${{ steps.result.outputs.scan_result }}
+  sbom-file:
+    description: "Path to generated SBOM file (if enabled)"
+    value: ${{ steps.sbom-path.outputs.sbom_file }}
+  platform-pair:
+    description: "Normalized platform name (e.g., linux-amd64)"
+    value: ${{ steps.prepare.outputs.platform_pair }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare platform pair
+      id: prepare
+      shell: bash
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: | # zizmor: ignore[github-env]
+        PLATFORM_PAIR="${PLATFORM//\//-}"
+        echo "platform_pair=${PLATFORM_PAIR}" >> "$GITHUB_OUTPUT"
+        echo "PLATFORM_PAIR=${PLATFORM_PAIR}" >> "$GITHUB_ENV"
+
+    - name: Login to Container Registry
+      uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.registry-username != '' && inputs.registry-username || github.actor }}
+        password: ${{ inputs.registry-password }}
+
+    - name: Run Trivy Vulnerability Scan
+      id: trivy-scan
+      uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+      env:
+        # Tell Trivy which platform to expect for the single-arch image
+        TRIVY_PLATFORM: ${{ inputs.platform }}
+      with:
+        image-ref: "${{ inputs.registry }}/${{ inputs.image-name }}@${{ inputs.digest }}"
+        format: "sarif"
+        output: "trivy-results-${{ env.PLATFORM_PAIR }}.sarif"
+        severity: "${{ inputs.severity-threshold }}"
+        ignore-unfixed: ${{ inputs.ignore-unfixed }}
+        skip-dirs: ${{ inputs.skip-dirs }}
+        exit-code: ${{ inputs.fail-on-vuln == 'true' && '1' || '0' }}
+      continue-on-error: ${{ inputs.fail-on-vuln != 'true' }}
+
+    - name: Run Trivy (Table Output)
+      uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+      env:
+        TRIVY_PLATFORM: ${{ inputs.platform }}
+      with:
+        image-ref: "${{ inputs.registry }}/${{ inputs.image-name }}@${{ inputs.digest }}"
+        format: "table"
+        severity: "${{ inputs.severity-threshold }}"
+        ignore-unfixed: ${{ inputs.ignore-unfixed }}
+        exit-code: "0"
+
+    - name: Generate SBOM
+      if: inputs.sbom-enabled == 'true'
+      uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
+      env:
+        TRIVY_PLATFORM: ${{ inputs.platform }}
+      with:
+        image-ref: "${{ inputs.registry }}/${{ inputs.image-name }}@${{ inputs.digest }}"
+        format: "${{ inputs.sbom-format }}"
+        output: "sbom-${{ env.PLATFORM_PAIR }}.${{ inputs.sbom-format == 'cyclonedx' && 'json' || 'spdx.json' }}"
+        scan-type: "image"
+        list-all-pkgs: "true"
+
+    - name: Get SBOM Path
+      id: sbom-path
+      if: inputs.sbom-enabled == 'true'
+      shell: bash
+      env:
+        SBOM_EXT: ${{ inputs.sbom-format == 'cyclonedx' && 'json' || 'spdx.json' }}
+      run: |
+        SBOM_FILE="sbom-${PLATFORM_PAIR}.${SBOM_EXT}"
+        echo "sbom_file=${SBOM_FILE}" >> "$GITHUB_OUTPUT"
+
+    - name: Upload SARIF to GitHub Security
+      uses: github/codeql-action/upload-sarif@cdefb33c0f6224e58673d9004f47f7cb3e328b89 # v4.31.10
+      if: always()
+      with:
+        sarif_file: "trivy-results-${{ env.PLATFORM_PAIR }}.sarif"
+        category: "${{ inputs.sarif-category-prefix }}-${{ env.PLATFORM_PAIR }}"
+
+    - name: Upload SBOM Artifact
+      if: inputs.sbom-enabled == 'true'
+      uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      with:
+        name: sbom-${{ env.PLATFORM_PAIR }}
+        path: "sbom-${{ env.PLATFORM_PAIR }}.*"
+        retention-days: 90
+
+    # Per-architecture SBOM attestation (SLSA best practice)
+    # Attests the SBOM to the specific architecture image digest
+    - name: Install Cosign
+      if: inputs.sbom-enabled == 'true' && inputs.sbom-attestation == 'true'
+      uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+    - name: Attest SBOM to Architecture Image
+      if: inputs.sbom-enabled == 'true' && inputs.sbom-attestation == 'true'
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+        DIGEST: ${{ inputs.digest }}
+        SBOM_FILE: ${{ steps.sbom-path.outputs.sbom_file }}
+        SBOM_FORMAT: ${{ inputs.sbom-format }}
+      run: |
+        echo "Attesting SBOM to ${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+        # Use the appropriate predicate type based on SBOM format
+        if [[ "$SBOM_FORMAT" == "cyclonedx" ]]; then
+          PREDICATE_TYPE="cyclonedx"
+        else
+          PREDICATE_TYPE="spdxjson"
+        fi
+        cosign attest --yes \
+          --predicate "${SBOM_FILE}" \
+          --type "${PREDICATE_TYPE}" \
+          "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+        echo "SBOM attestation complete for ${PLATFORM_PAIR}"
+
+    - name: Check Scan Result
+      id: result
+      if: always()
+      shell: bash
+      env:
+        TRIVY_OUTCOME: ${{ steps.trivy-scan.outcome }}
+        FAIL_ON_VULN: ${{ inputs.fail-on-vuln }}
+      run: |
+        if [[ "${TRIVY_OUTCOME}" == "failure" ]]; then
+          if [[ "${FAIL_ON_VULN}" == "true" ]]; then
+            echo "scan_result=failed" >> "$GITHUB_OUTPUT"
+            echo "::error::Vulnerabilities found at severity threshold. Build failed."
+            exit 1
+          else
+            echo "scan_result=warning" >> "$GITHUB_OUTPUT"
+            echo "::warning::Vulnerabilities found but fail-on-vuln is disabled."
+          fi
+        else
+          echo "scan_result=passed" >> "$GITHUB_OUTPUT"
+          echo "Scan passed: No vulnerabilities at threshold severity."
+        fi

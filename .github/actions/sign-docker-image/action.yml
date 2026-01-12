@@ -1,0 +1,92 @@
+name: "Sign Docker Image"
+description: "Sign Docker images using Cosign with keyless OIDC or private key method"
+author: "thpham"
+
+inputs:
+  registry:
+    description: "Container registry (e.g., ghcr.io)"
+    required: true
+  image-name:
+    description: "Full image name without tag"
+    required: true
+  digest:
+    description: "Image manifest digest to sign (sha256:...)"
+    required: true
+  sign-images:
+    description: "Enable/disable signing"
+    required: false
+    default: "true"
+  signing-method:
+    description: "Signing method: 'oidc' (keyless) or 'key' (private key)"
+    required: false
+    default: "oidc"
+  cosign-private-key:
+    description: "Cosign private key (required if signing-method is 'key')"
+    required: false
+    default: ""
+  cosign-password:
+    description: "Cosign private key password (required if signing-method is 'key')"
+    required: false
+    default: ""
+
+outputs:
+  signed:
+    description: "'true' if image was signed successfully, 'false' otherwise"
+    value: ${{ steps.sign-result.outputs.signed }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Cosign
+      if: inputs.sign-images == 'true'
+      uses: sigstore/cosign-installer@7e8b541eb2e61bf99390e1afd4be13a184e9ebc5 # v3.10.1
+
+    - name: Sign Container Image (Keyless OIDC)
+      id: sign-oidc
+      if: inputs.sign-images == 'true' && inputs.signing-method == 'oidc'
+      shell: bash
+      env:
+        DIGEST: ${{ inputs.digest }}
+        REGISTRY: ${{ inputs.registry }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+      run: |
+        cosign sign --yes \
+          "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+        echo "Image signed with keyless OIDC"
+
+    - name: Sign Container Image (Private Key)
+      id: sign-key
+      if: inputs.sign-images == 'true' && inputs.signing-method == 'key'
+      shell: bash
+      env:
+        COSIGN_PRIVATE_KEY: ${{ inputs.cosign-private-key }}
+        COSIGN_PASSWORD: ${{ inputs.cosign-password }}
+        DIGEST: ${{ inputs.digest }}
+        REGISTRY: ${{ inputs.registry }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+      run: |
+        cosign sign --key env://COSIGN_PRIVATE_KEY \
+          "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
+        echo "Image signed with private key"
+
+    - name: Report Signing Status
+      id: sign-result
+      if: always()
+      shell: bash
+      env:
+        SIGN_IMAGES: ${{ inputs.sign-images }}
+        OIDC_OUTCOME: ${{ steps.sign-oidc.outcome }}
+        KEY_OUTCOME: ${{ steps.sign-key.outcome }}
+      run: |
+        if [[ "${SIGN_IMAGES}" == "true" ]]; then
+          if [[ "${OIDC_OUTCOME}" == "success" ]] || [[ "${KEY_OUTCOME}" == "success" ]]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Image signing successful"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Image signing was enabled but did not complete successfully"
+          fi
+        else
+          echo "signed=false" >> "$GITHUB_OUTPUT"
+          echo "Image signing was not enabled"
+        fi

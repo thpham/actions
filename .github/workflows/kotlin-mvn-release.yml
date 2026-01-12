@@ -130,6 +130,67 @@ on:
         type: boolean
         default: false
 
+      # Security scanning configuration (stricter defaults for releases)
+      security-scan-enabled:
+        description: "Enable Trivy vulnerability scanning"
+        required: false
+        type: boolean
+        default: true
+      scan-severity-threshold:
+        description: "Minimum severity to report (CRITICAL, HIGH, MEDIUM, LOW)"
+        required: false
+        type: string
+        default: "CRITICAL,HIGH"
+      scan-fail-on-vuln:
+        description: "Fail build if vulnerabilities found at threshold"
+        required: false
+        type: boolean
+        default: true
+      trivy-ignore-unfixed:
+        description: "Ignore unfixed vulnerabilities"
+        required: false
+        type: boolean
+        default: false
+      trivy-skip-dirs:
+        description: "Directories to skip during scanning (comma-separated)"
+        required: false
+        type: string
+        default: ""
+
+      # Image signing configuration
+      sign-images:
+        description: "Enable Cosign image signing"
+        required: false
+        type: boolean
+        default: true
+      signing-method:
+        description: "Signing method: 'oidc' (keyless) or 'key' (private key)"
+        required: false
+        type: string
+        default: "oidc"
+
+      # SBOM configuration
+      sbom-enabled:
+        description: "Generate container SBOM with Trivy"
+        required: false
+        type: boolean
+        default: true
+      sbom-format:
+        description: "SBOM format: 'cyclonedx' or 'spdx'"
+        required: false
+        type: string
+        default: "cyclonedx"
+      sbom-attestation:
+        description: "Attach SBOM as in-toto attestation"
+        required: false
+        type: boolean
+        default: true
+      sbom-upload-release:
+        description: "Upload SBOM to GitHub release assets"
+        required: false
+        type: boolean
+        default: true
+
     outputs:
       release_created:
         description: "Whether a release was created"
@@ -140,6 +201,16 @@ on:
       tag_name:
         description: "Release tag name"
         value: ${{ jobs.release-please.outputs.tag_name }}
+      # Note: scan_result output removed - job results are not accessible in workflow outputs
+      # The merge-docker job only runs if scan-docker passes, so check merge-docker.outputs.digest instead
+      image_signed:
+        description: "Whether the image was signed"
+        value: ${{ jobs.merge-docker.outputs.signed }}
+      manifest_digest:
+        description: "Multi-arch manifest digest"
+        value: ${{ jobs.merge-docker.outputs.digest }}
+      # Note: SBOM attestation now happens per-architecture in scan-docker job (SLSA best practice)
+      # Each architecture image digest gets its own SBOM attestation; merged SBOM is uploaded as release asset only
 
     secrets:
       GPG_SECRET_KEY:
@@ -156,6 +227,12 @@ on:
         required: false
       SLACK_WEBHOOK:
         description: "Slack webhook URL"
+        required: false
+      COSIGN_PRIVATE_KEY:
+        description: "Cosign private key (required if signing-method is 'key')"
+        required: false
+      COSIGN_PASSWORD:
+        description: "Cosign private key password"
         required: false
 
 jobs:
@@ -380,12 +457,6 @@ jobs:
       packages: write
 
     steps:
-      - name: Prepare platform pair
-        id: prepare
-        run: |
-          platform="${{ matrix.platform }}"
-          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
-
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
@@ -393,104 +464,116 @@ jobs:
           ref: ${{ needs.release-please.outputs.tag_name }}
           persist-credentials: false
 
-      - name: Download Docker Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
-        with:
-          name: docker-artifacts
-          path: /tmp/build-artifacts
-
-      - name: Flatten Artifacts to Docker Context
-        env:
-          BUILD_CONTEXT: ${{ inputs.docker-context }}
-          ARTIFACT_DEST: ${{ inputs.artifact-destination }}
-        run: |
-          DEST_DIR="${BUILD_CONTEXT}/${ARTIFACT_DEST}"
-          mkdir -p "${DEST_DIR}"
-          echo "=== Downloaded artifacts ==="
-          find /tmp/build-artifacts -type f
-          echo "=== Flattening to ${DEST_DIR}/ ==="
-          find /tmp/build-artifacts -type f -exec cp {} "${DEST_DIR}/" \;
-          echo "=== Flattened artifacts ==="
-          ls -la "${DEST_DIR}/"
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Login to Container Registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+      - name: Build and Push Docker Image
+        id: build
+        uses: thpham/actions/.github/actions/build-docker-image@main # zizmor: ignore[unpinned-uses]
         with:
           registry: ${{ inputs.docker-registry }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker Metadata
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
-        with:
-          images: ${{ inputs.docker-registry }}/${{ inputs.docker-image-name }}
-
-      - name: Build and Push by Digest
-        id: build
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        env:
-          BUILD_CONTEXT: ${{ inputs.docker-context }}
-          BUILD_DOCKERFILE: ${{ inputs.docker-file }}
-        with:
-          # zizmor: ignore[template-injection] - workflow_call input from trusted callers, path value only
-          context: ${{ env.BUILD_CONTEXT }}
-          file: ${{ env.BUILD_CONTEXT }}/${{ env.BUILD_DOCKERFILE }}
-          platforms: ${{ matrix.platform }}
+          image-name: ${{ inputs.docker-image-name }}
+          platform: ${{ matrix.platform }}
+          context: ${{ inputs.docker-context }}
+          dockerfile: ${{ inputs.docker-file }}
+          version: ${{ needs.release-please.outputs.version }}
           build-args: |
             GIT_SHA=${{ github.sha }}
             BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp }}
-            VERSION=${{ needs.release-please.outputs.version }}
             IMAGE_TYPE=release
             RETENTION=forever
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ inputs.docker-registry }}/${{ inputs.docker-image-name }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=${{ github.repository }}-release-${{ matrix.platform }}
-          cache-to: type=gha,scope=${{ github.repository }}-release-${{ matrix.platform }},mode=max
+          cache-scope: ${{ github.repository }}-release-${{ matrix.platform }}
+          artifact-name: docker-artifacts
+          artifact-destination: ${{ inputs.artifact-destination }}
+          digest-artifact-prefix: release-digests
+          artifact-retention-days: 1
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Export Digest
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+  # Security scanning for each platform image
+  scan-docker:
+    name: Scan Docker ${{ matrix.platform }}
+    needs: [release-please, build-docker]
+    if: |
+      needs.release-please.outputs.release_created == 'true' &&
+      inputs.security-scan-enabled
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+        include:
+          - platform: linux/amd64
+            runner: ${{ inputs.amd64-runner }}
+          - platform: linux/arm64
+            runner: ${{ inputs.arm64-runner }}
+        exclude:
+          - platform: ${{ inputs.enable-arm64 == false && 'linux/arm64' || 'exclude-nothing' }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+      id-token: write # Required for OIDC keyless SBOM attestation
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
+
+      - name: Prepare platform pair
+        id: prepare
         run: |
-          mkdir -p /tmp/digests
-          touch "/tmp/digests/${DIGEST#sha256:}"
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
-      - name: Upload Digest
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - name: Download Digest
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: release-digests-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: 1
+          path: /tmp/digests
+
+      - name: Get Image Digest
+        id: digest
+        run: |
+          DIGEST_FILE=$(ls /tmp/digests/)
+          echo "digest=sha256:${DIGEST_FILE}" >> "$GITHUB_OUTPUT"
+          echo "Image digest: sha256:${DIGEST_FILE}"
+
+      - name: Scan Docker Image
+        uses: thpham/actions/.github/actions/scan-docker-image@main # zizmor: ignore[unpinned-uses]
+        with:
+          registry: ${{ inputs.docker-registry }}
+          image-name: ${{ inputs.docker-image-name }}
+          digest: ${{ steps.digest.outputs.digest }}
+          platform: ${{ matrix.platform }}
+          severity-threshold: ${{ inputs.scan-severity-threshold }}
+          fail-on-vuln: ${{ inputs.scan-fail-on-vuln }}
+          ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
+          skip-dirs: ${{ inputs.trivy-skip-dirs }}
+          sbom-enabled: ${{ inputs.sbom-enabled }}
+          sbom-format: ${{ inputs.sbom-format }}
+          sbom-attestation: ${{ inputs.sbom-attestation }}
+          sarif-category-prefix: trivy-release
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
 
   merge-docker:
     name: Merge Multi-Arch Manifest
-    needs: [release-please, build-docker]
+    needs: [release-please, build-docker, scan-docker]
+    if: |
+      always() &&
+      needs.build-docker.result == 'success' &&
+      (needs.scan-docker.result == 'success' || needs.scan-docker.result == 'skipped')
     runs-on: ${{ inputs.amd64-runner }}
     permissions:
       contents: read
       packages: write
+      id-token: write # Required for OIDC keyless signing
+    outputs:
+      digest: ${{ steps.manifest-digest.outputs.digest }}
+      signed: ${{ steps.sign-result.outputs.signed }}
 
     steps:
-      - name: Download Digests
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
-          path: /tmp/digests
-          pattern: release-digests-*
-          merge-multiple: true
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Login to Container Registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
-        with:
-          registry: ${{ inputs.docker-registry }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: false
 
       - name: Determine Docker Tags
         id: docker-tags
@@ -515,31 +598,74 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Docker Metadata
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+      - name: Merge Docker Manifest
+        id: manifest-digest
+        uses: thpham/actions/.github/actions/merge-docker-manifest@main # zizmor: ignore[unpinned-uses]
         with:
-          images: ${{ inputs.docker-registry }}/${{ inputs.docker-image-name }}
+          registry: ${{ inputs.docker-registry }}
+          image-name: ${{ inputs.docker-image-name }}
           tags: ${{ steps.docker-tags.outputs.tags }}
+          digest-artifact-pattern: release-digests-*
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Manifest List
-        working-directory: /tmp/digests
-        env:
-          REGISTRY: ${{ inputs.docker-registry }}
-          IMAGE_NAME: ${{ inputs.docker-image-name }}
-        run: |
-          # shellcheck disable=SC2046
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
+      - name: Sign Docker Image
+        id: sign-result
+        uses: thpham/actions/.github/actions/sign-docker-image@main # zizmor: ignore[unpinned-uses]
+        with:
+          registry: ${{ inputs.docker-registry }}
+          image-name: ${{ inputs.docker-image-name }}
+          digest: ${{ steps.manifest-digest.outputs.digest }}
+          sign-images: ${{ inputs.sign-images }}
+          signing-method: ${{ inputs.signing-method }}
+          cosign-private-key: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          cosign-password: ${{ secrets.COSIGN_PASSWORD }}
 
-      - name: Inspect Manifest
+      # Merged SBOM for release assets (per-architecture attestation happens in scan-docker job)
+      # This merged SBOM is for download convenience only - not attested to manifest
+      - name: Download SBOMs
+        if: inputs.sbom-enabled
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          pattern: sbom-*
+          path: /tmp/sboms
+          merge-multiple: true
+
+      - name: Merge SBOMs for Release Asset
+        if: inputs.sbom-enabled
         env:
-          REGISTRY: ${{ inputs.docker-registry }}
-          IMAGE_NAME: ${{ inputs.docker-image-name }}
           VERSION: ${{ needs.release-please.outputs.version }}
+          SBOM_FORMAT: ${{ inputs.sbom-format }}
         run: |
-          docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${VERSION}"
+          echo "=== Downloaded SBOMs ==="
+          ls -la /tmp/sboms/ || echo "No SBOMs found"
+
+          # For CycloneDX, merge components from both architecture SBOMs
+          if [[ "${SBOM_FORMAT}" == "cyclonedx" ]]; then
+            if ls /tmp/sboms/sbom-*.json 1> /dev/null 2>&1; then
+              echo "Merging CycloneDX SBOMs..."
+              jq -s '.[0] * {components: ([.[].components] | add | unique_by(.purl // .name))}' \
+                /tmp/sboms/sbom-*.json > /tmp/sboms/sbom-combined.json
+              echo "Combined SBOM created for release asset"
+            else
+              echo "::warning::No CycloneDX SBOM files found"
+            fi
+          else
+            # For SPDX, use amd64 as primary
+            if [[ -f /tmp/sboms/sbom-linux-amd64.spdx.json ]]; then
+              cp /tmp/sboms/sbom-linux-amd64.spdx.json /tmp/sboms/sbom-combined.spdx.json
+            else
+              echo "::warning::No SPDX SBOM file found"
+            fi
+          fi
+
+      - name: Upload Combined SBOM Artifact
+        if: inputs.sbom-enabled
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: sbom-combined
+          path: /tmp/sboms/sbom-combined.*
+          retention-days: 90
+          if-no-files-found: warn
 
   distribute:
     name: Distribute with JReleaser
@@ -566,13 +692,13 @@ jobs:
 
       # Download both artifacts - staging-deploy for Maven artifacts, docker-artifacts for JAR files
       - name: Download Release Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: release-artifacts
           path: ${{ inputs.staging-deploy-dir }}
 
       - name: Download Docker Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: docker-artifacts
           path: /tmp/docker-artifacts
@@ -618,6 +744,35 @@ jobs:
 
           echo "=== Available JARs for JReleaser ==="
           find . -name "*.jar" -path "*/target/*" -type f
+
+      - name: Download Combined SBOM
+        if: inputs.sbom-upload-release
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: sbom-combined
+          path: /tmp/sbom
+        continue-on-error: true
+
+      - name: Upload SBOM to Release
+        if: inputs.sbom-upload-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ needs.release-please.outputs.tag_name }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+          SBOM_FORMAT: ${{ inputs.sbom-format }}
+        run: |
+          SBOM_EXT="${{ inputs.sbom-format == 'cyclonedx' && 'json' || 'spdx.json' }}"
+          SBOM_FILE="/tmp/sbom/sbom-combined.${SBOM_EXT}"
+          if [[ -f "${SBOM_FILE}" ]]; then
+            # Rename for release asset
+            ASSET_NAME="sbom-${VERSION}.${SBOM_FORMAT}.json"
+            cp "${SBOM_FILE}" "/tmp/sbom/${ASSET_NAME}"
+            echo "Uploading SBOM to release: ${ASSET_NAME}"
+            gh release upload "${TAG_NAME}" "/tmp/sbom/${ASSET_NAME}" --clobber
+            echo "SBOM uploaded successfully"
+          else
+            echo "::warning::SBOM file not found at ${SBOM_FILE}, skipping upload"
+          fi
 
       - name: Run JReleaser
         uses: jreleaser/release-action@90ac653bb9c79d11179e65d81499f3f34527dcd5 # v2

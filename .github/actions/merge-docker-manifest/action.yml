@@ -1,0 +1,95 @@
+name: "Merge Docker Manifest"
+description: "Create multi-architecture Docker manifest from per-platform digests"
+author: "thpham"
+
+inputs:
+  registry:
+    description: "Container registry (e.g., ghcr.io)"
+    required: true
+  image-name:
+    description: "Full image name without tag"
+    required: true
+  tags:
+    description: "Newline-separated list of tags for the manifest"
+    required: true
+  digest-artifact-pattern:
+    description: "Artifact pattern to download digests (e.g., 'digests-*')"
+    required: true
+  registry-username:
+    description: "Registry username for authentication"
+    required: false
+    default: ""
+  registry-password:
+    description: "Registry password/token for authentication"
+    required: true
+
+outputs:
+  digest:
+    description: "Multi-arch manifest digest (sha256:...)"
+    value: ${{ steps.manifest-digest.outputs.digest }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download Digests
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+      with:
+        path: /tmp/digests
+        pattern: ${{ inputs.digest-artifact-pattern }}
+        merge-multiple: true
+
+    - name: Setup Docker Buildx
+      uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+    - name: Login to Container Registry
+      uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+      with:
+        registry: ${{ inputs.registry }}
+        username: ${{ inputs.registry-username != '' && inputs.registry-username || github.actor }}
+        password: ${{ inputs.registry-password }}
+
+    - name: Docker Metadata
+      id: meta
+      uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+      with:
+        images: ${{ inputs.registry }}/${{ inputs.image-name }}
+        tags: ${{ inputs.tags }}
+
+    - name: Create Manifest List
+      shell: bash
+      working-directory: /tmp/digests
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+      run: |
+        # shellcheck disable=SC2046
+        docker buildx imagetools create \
+          $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+          $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
+
+    - name: Inspect Manifest
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+        TAGS: ${{ inputs.tags }}
+      run: |
+        # Use first tag for inspection
+        FIRST_TAG=$(echo "$TAGS" | head -n1 | sed 's/^type=raw,value=//')
+        docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${FIRST_TAG}"
+
+    - name: Get Manifest Digest
+      id: manifest-digest
+      shell: bash
+      env:
+        REGISTRY: ${{ inputs.registry }}
+        IMAGE_NAME: ${{ inputs.image-name }}
+        TAGS: ${{ inputs.tags }}
+      run: |
+        # Use first tag to get digest
+        FIRST_TAG=$(echo "$TAGS" | head -n1 | sed 's/^type=raw,value=//')
+        DIGEST=$(docker buildx imagetools inspect \
+          "${REGISTRY}/${IMAGE_NAME}:${FIRST_TAG}" \
+          --format '{{json .Manifest.Digest}}' | tr -d '"')
+        echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+        echo "Manifest digest: ${DIGEST}"
