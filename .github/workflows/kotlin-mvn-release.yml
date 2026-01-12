@@ -524,7 +524,7 @@ jobs:
           echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
       - name: Download Digest
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: release-digests-${{ env.PLATFORM_PAIR }}
           path: /tmp/digests
@@ -624,7 +624,7 @@ jobs:
       # This merged SBOM is for download convenience only - not attested to manifest
       - name: Download SBOMs
         if: inputs.sbom-enabled
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           pattern: sbom-*
           path: /tmp/sboms
@@ -692,13 +692,13 @@ jobs:
 
       # Download both artifacts - staging-deploy for Maven artifacts, docker-artifacts for JAR files
       - name: Download Release Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: release-artifacts
           path: ${{ inputs.staging-deploy-dir }}
 
       - name: Download Docker Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: docker-artifacts
           path: /tmp/docker-artifacts
@@ -747,7 +747,7 @@ jobs:
 
       - name: Download Combined SBOM
         if: inputs.sbom-upload-release
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: sbom-combined
           path: /tmp/sbom
