@@ -157,12 +157,28 @@ jobs:
 
 ### Verify Image Signature (Keyless OIDC)
 
+When using these reusable workflows, the certificate identity reflects the **workflow's repository**
+(`thpham/actions`), not the calling repository. This is expected behavior since the signing happens
+within the reusable workflow context.
+
 ```bash
+# For images built with thpham/actions reusable workflows
 cosign verify \
-  --certificate-identity-regexp="https://github.com/OWNER/REPO/.*" \
+  --certificate-identity-regexp="https://github.com/thpham/actions/.*" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
   ghcr.io/owner/repo/image:tag
+
+# Example: Verify a specific image
+cosign verify \
+  --certificate-identity-regexp="https://github.com/thpham/actions/.*" \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+  ghcr.io/thpham/gha-mvn-rflow/myproject-api:v1.0.0
 ```
+
+The signature metadata includes the actual calling repository context:
+- `githubWorkflowRepository`: The repository that triggered the workflow
+- `githubWorkflowRef`: The branch/tag that triggered the build
+- `githubWorkflowTrigger`: The event type (push, pull_request, etc.)
 
 ### Verify Image Signature (Private Key)
 
@@ -183,7 +199,7 @@ docker manifest inspect ghcr.io/owner/repo/image:tag | jq '.manifests[] | select
 # Verify SBOM attestation on the architecture digest
 cosign verify-attestation \
   --type cyclonedx \
-  --certificate-identity-regexp="https://github.com/OWNER/REPO/.*" \
+  --certificate-identity-regexp="https://github.com/thpham/actions/.*" \
   --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
   ghcr.io/owner/repo/image@sha256:abc123...
 ```
