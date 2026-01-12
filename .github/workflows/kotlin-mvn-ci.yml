@@ -106,6 +106,58 @@ on:
         type: string
         default: "ubuntu-24.04-arm"
 
+      # Security scanning configuration
+      security-scan-enabled:
+        description: "Enable Trivy vulnerability scanning"
+        required: false
+        type: boolean
+        default: true
+      pr-scan-label:
+        description: "PR label that triggers security scanning (in addition to preview-image)"
+        required: false
+        type: string
+        default: "scan-image"
+      scan-severity-threshold:
+        description: "Minimum severity to report (CRITICAL, HIGH, MEDIUM, LOW)"
+        required: false
+        type: string
+        default: "CRITICAL,HIGH"
+      scan-fail-on-vuln:
+        description: "Fail build if vulnerabilities found at threshold"
+        required: false
+        type: boolean
+        default: false
+      trivy-ignore-unfixed:
+        description: "Ignore unfixed vulnerabilities"
+        required: false
+        type: boolean
+        default: true
+      trivy-skip-dirs:
+        description: "Directories to skip during scanning (comma-separated)"
+        required: false
+        type: string
+        default: ""
+
+      # Image signing configuration
+      sign-images:
+        description: "Enable Cosign image signing"
+        required: false
+        type: boolean
+        default: false
+      signing-method:
+        description: "Signing method: 'oidc' (keyless) or 'key' (private key)"
+        required: false
+        type: string
+        default: "oidc"
+
+    secrets:
+      COSIGN_PRIVATE_KEY:
+        description: "Cosign private key (required if signing-method is 'key')"
+        required: false
+      COSIGN_PASSWORD:
+        description: "Cosign private key password"
+        required: false
+
     outputs:
       version:
         description: "Maven project version"
@@ -119,6 +171,14 @@ on:
       is_pr:
         description: "Whether this is a PR build"
         value: ${{ jobs.build.outputs.is_pr }}
+      # Note: scan_result output removed - job results are not accessible in workflow outputs
+      # The merge-docker job only runs if scan-docker passes, so check merge-docker.outputs.digest instead
+      image_signed:
+        description: "Whether the image was signed"
+        value: ${{ jobs.merge-docker.outputs.signed }}
+      manifest_digest:
+        description: "Multi-arch manifest digest"
+        value: ${{ jobs.merge-docker.outputs.digest }}
 
 permissions:
   contents: read
@@ -296,8 +356,8 @@ jobs:
           exit 1
 
   # Native Multi-Architecture Docker Build (Matrix Strategy)
-  build-image:
-    name: Build ${{ matrix.platform }}
+  build-docker:
+    name: Build Docker ${{ matrix.platform }}
     needs: [build, lint]
     # Build Docker images for:
     # - PRs with 'preview-image' label
@@ -328,46 +388,10 @@ jobs:
       packages: write
 
     steps:
-      - name: Prepare platform pair
-        id: prepare
-        run: |
-          platform="${{ matrix.platform }}"
-          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
-
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
           persist-credentials: false
-
-      - name: Download Build Artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
-        with:
-          name: build-artifacts
-          path: /tmp/build-artifacts
-
-      - name: Flatten Artifacts to Docker Context
-        env:
-          BUILD_CONTEXT: ${{ inputs.docker-context }}
-          ARTIFACT_DEST: ${{ inputs.artifact-destination }}
-        run: |
-          DEST_DIR="${BUILD_CONTEXT}/${ARTIFACT_DEST}"
-          mkdir -p "${DEST_DIR}"
-          echo "=== Downloaded artifacts ==="
-          find /tmp/build-artifacts -type f
-          echo "=== Flattening to ${DEST_DIR}/ ==="
-          find /tmp/build-artifacts -type f -exec cp {} "${DEST_DIR}/" \;
-          echo "=== Flattened artifacts ==="
-          ls -la "${DEST_DIR}/"
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Login to Container Registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
-        with:
-          registry: ${{ inputs.docker-registry }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Determine image type
         id: image-type
@@ -386,107 +410,142 @@ jobs:
             } >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Docker Metadata
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
-        with:
-          images: ${{ inputs.docker-registry }}/${{ inputs.docker-image-name }}
-
-      - name: Build and Push by Digest
+      - name: Build and Push Docker Image
         id: build
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        env:
-          BUILD_CONTEXT: ${{ inputs.docker-context }}
-          BUILD_DOCKERFILE: ${{ inputs.docker-file }}
+        uses: ./.github/actions/build-docker-image
         with:
-          # zizmor: ignore[template-injection] - workflow_call input from trusted callers, path value only
-          context: ${{ env.BUILD_CONTEXT }}
-          file: ${{ env.BUILD_CONTEXT }}/${{ env.BUILD_DOCKERFILE }}
-          platforms: ${{ matrix.platform }}
+          registry: ${{ inputs.docker-registry }}
+          image-name: ${{ inputs.docker-image-name }}
+          platform: ${{ matrix.platform }}
+          context: ${{ inputs.docker-context }}
+          dockerfile: ${{ inputs.docker-file }}
+          version: ${{ needs.build.outputs.version }}
           build-args: |
             GIT_SHA=${{ github.sha }}
             BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
-            VERSION=${{ needs.build.outputs.version }}
             IMAGE_TYPE=${{ steps.image-type.outputs.type }}
             PR_NUMBER=${{ github.event.pull_request.number || '' }}
             BRANCH_NAME=${{ github.head_ref || github.ref_name }}
             RETENTION=${{ steps.image-type.outputs.retention }}
             ${{ inputs.docker-build-args }}
-          labels: ${{ steps.meta.outputs.labels }}
-          outputs: type=image,name=${{ inputs.docker-registry }}/${{ inputs.docker-image-name }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=gha,scope=${{ github.repository }}-${{ github.ref_name }}-${{ matrix.platform }}
-          cache-to: type=gha,scope=${{ github.repository }}-${{ github.ref_name }}-${{ matrix.platform }},mode=max
+          cache-scope: ${{ github.repository }}-${{ github.ref_name }}-${{ matrix.platform }}
+          artifact-name: build-artifacts
+          artifact-destination: ${{ inputs.artifact-destination }}
+          digest-artifact-prefix: digests
+          artifact-retention-days: ${{ inputs.artifact-retention-days }}
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Export Digest
-        env:
-          DIGEST: ${{ steps.build.outputs.digest }}
+  # Security scanning for each platform image
+  # For PRs: requires 'scan-image' label (opt-in for faster iteration)
+  # For pushes to main/master: always scans (CI gate)
+  scan-docker:
+    name: Scan Docker ${{ matrix.platform }}
+    needs: [build, build-docker]
+    if: |
+      always() &&
+      needs.build-docker.result == 'success' &&
+      inputs.security-scan-enabled &&
+      (
+        github.event_name != 'pull_request' ||
+        contains(github.event.pull_request.labels.*.name, inputs.pr-scan-label)
+      )
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux/amd64, linux/arm64]
+        include:
+          - platform: linux/amd64
+            runner: ${{ inputs.amd64-runner }}
+          - platform: linux/arm64
+            runner: ${{ inputs.arm64-runner }}
+        exclude:
+          - platform: ${{ inputs.enable-arm64 == false && 'linux/arm64' || 'exclude-nothing' }}
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      packages: read
+      security-events: write
+
+    steps:
+      - name: Prepare platform pair
+        id: prepare
         run: |
-          mkdir -p /tmp/digests
-          touch "/tmp/digests/${DIGEST#sha256:}"
+          platform="${{ matrix.platform }}"
+          echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
 
-      - name: Upload Digest
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+      - name: Download Digest
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
         with:
           name: digests-${{ env.PLATFORM_PAIR }}
-          path: /tmp/digests/*
-          if-no-files-found: error
-          retention-days: ${{ inputs.artifact-retention-days }}
+          path: /tmp/digests
 
-  merge-manifest:
+      - name: Get Image Digest
+        id: digest
+        run: |
+          DIGEST_FILE=$(ls /tmp/digests/)
+          echo "digest=sha256:${DIGEST_FILE}" >> "$GITHUB_OUTPUT"
+          echo "Image digest: sha256:${DIGEST_FILE}"
+
+      - name: Scan Docker Image
+        uses: ./.github/actions/scan-docker-image
+        with:
+          registry: ${{ inputs.docker-registry }}
+          image-name: ${{ inputs.docker-image-name }}
+          digest: ${{ steps.digest.outputs.digest }}
+          platform: ${{ matrix.platform }}
+          severity-threshold: ${{ inputs.scan-severity-threshold }}
+          fail-on-vuln: ${{ inputs.scan-fail-on-vuln }}
+          ignore-unfixed: ${{ inputs.trivy-ignore-unfixed }}
+          skip-dirs: ${{ inputs.trivy-skip-dirs }}
+          sarif-category-prefix: trivy
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  merge-docker:
     name: Merge Multi-Arch Manifest
-    needs: [build, build-image]
-    if: always() && needs.build-image.result == 'success'
+    needs: [build, build-docker, scan-docker]
+    if: |
+      always() &&
+      needs.build-docker.result == 'success' &&
+      (needs.scan-docker.result == 'success' || needs.scan-docker.result == 'skipped')
     runs-on: ${{ inputs.amd64-runner }}
     permissions:
       contents: read
       packages: write
       pull-requests: write
+      id-token: write # Required for OIDC keyless signing
+    outputs:
+      digest: ${{ steps.manifest-digest.outputs.digest }}
+      signed: ${{ steps.sign-result.outputs.signed }}
 
     steps:
-      - name: Download Digests
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v4
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
         with:
-          path: /tmp/digests
-          pattern: digests-*
-          merge-multiple: true
+          persist-credentials: false
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: Login to Container Registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef # v3
+      - name: Merge Docker Manifest
+        id: manifest-digest
+        uses: ./.github/actions/merge-docker-manifest
         with:
           registry: ${{ inputs.docker-registry }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Docker Metadata
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
-        with:
-          images: ${{ inputs.docker-registry }}/${{ inputs.docker-image-name }}
+          image-name: ${{ inputs.docker-image-name }}
           tags: |
             type=raw,value=${{ needs.build.outputs.primary_tag }}
             type=raw,value=${{ needs.build.outputs.rolling_tag }}
+          digest-artifact-pattern: digests-*
+          registry-password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create Manifest List
-        working-directory: /tmp/digests
-        env:
-          REGISTRY: ${{ inputs.docker-registry }}
-          IMAGE_NAME: ${{ inputs.docker-image-name }}
-        run: |
-          # shellcheck disable=SC2046
-          docker buildx imagetools create \
-            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf "${REGISTRY}/${IMAGE_NAME}@sha256:%s " *)
-
-      - name: Inspect Manifest
-        env:
-          REGISTRY: ${{ inputs.docker-registry }}
-          IMAGE_NAME: ${{ inputs.docker-image-name }}
-          ROLLING_TAG: ${{ needs.build.outputs.rolling_tag }}
-        run: |
-          docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${ROLLING_TAG}"
+      - name: Sign Docker Image
+        id: sign-result
+        uses: ./.github/actions/sign-docker-image
+        with:
+          registry: ${{ inputs.docker-registry }}
+          image-name: ${{ inputs.docker-image-name }}
+          digest: ${{ steps.manifest-digest.outputs.digest }}
+          sign-images: ${{ inputs.sign-images }}
+          signing-method: ${{ inputs.signing-method }}
+          cosign-private-key: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          cosign-password: ${{ secrets.COSIGN_PASSWORD }}
 
       - name: Comment PR with preview info
         if: github.event_name == 'pull_request'

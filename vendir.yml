@@ -195,3 +195,36 @@ directories:
         includePaths:
           - action.yml
           - dist/**
+
+      # ─────────────────────────────────────────────────────────────────────────
+      # Security Scanning & Signing Actions
+      # ─────────────────────────────────────────────────────────────────────────
+
+      # aquasecurity/trivy-action@v0.33.1 (Composite action)
+      # Required: action.yml only (uses Trivy CLI installed at runtime)
+      - path: aquasecurity/trivy-action
+        git:
+          url: https://github.com/aquasecurity/trivy-action
+          ref: b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
+        includePaths:
+          - action.yml
+
+      # sigstore/cosign-installer@v3.10.1 (JavaScript/Node)
+      # Required: action.yml + dist/
+      - path: sigstore/cosign-installer
+        git:
+          url: https://github.com/sigstore/cosign-installer
+          ref: 7e8b541eb2e61bf99390e1afd4be13a184e9ebc5
+        includePaths:
+          - action.yml
+          - dist/**
+
+      # github/codeql-action@v3.31.9 (JavaScript/Node)
+      # Required: upload-sarif subaction only
+      - path: github/codeql-action
+        git:
+          url: https://github.com/github/codeql-action
+          ref: 45c373516f557556c15d420e3f5e0aa3d64366bc
+        includePaths:
+          - upload-sarif/action.yml
+          - upload-sarif/dist/**
