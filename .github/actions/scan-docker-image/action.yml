@@ -72,9 +72,10 @@ runs:
     - name: Prepare platform pair
       id: prepare
       shell: bash
-      run: |
-        platform="${{ inputs.platform }}"
-        PLATFORM_PAIR="${platform//\//-}"
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: | # zizmor: ignore[github-env]
+        PLATFORM_PAIR="${PLATFORM//\//-}"
         echo "platform_pair=${PLATFORM_PAIR}" >> "$GITHUB_OUTPUT"
         echo "PLATFORM_PAIR=${PLATFORM_PAIR}" >> "$GITHUB_ENV"
 
@@ -128,8 +129,10 @@ runs:
       id: sbom-path
       if: inputs.sbom-enabled == 'true'
       shell: bash
+      env:
+        SBOM_EXT: ${{ inputs.sbom-format == 'cyclonedx' && 'json' || 'spdx.json' }}
       run: |
-        SBOM_FILE="sbom-${{ env.PLATFORM_PAIR }}.${{ inputs.sbom-format == 'cyclonedx' && 'json' || 'spdx.json' }}"
+        SBOM_FILE="sbom-${PLATFORM_PAIR}.${SBOM_EXT}"
         echo "sbom_file=${SBOM_FILE}" >> "$GITHUB_OUTPUT"
 
     - name: Upload SARIF to GitHub Security
@@ -180,9 +183,12 @@ runs:
       id: result
       if: always()
       shell: bash
+      env:
+        TRIVY_OUTCOME: ${{ steps.trivy-scan.outcome }}
+        FAIL_ON_VULN: ${{ inputs.fail-on-vuln }}
       run: |
-        if [[ "${{ steps.trivy-scan.outcome }}" == "failure" ]]; then
-          if [[ "${{ inputs.fail-on-vuln }}" == "true" ]]; then
+        if [[ "${TRIVY_OUTCOME}" == "failure" ]]; then
+          if [[ "${FAIL_ON_VULN}" == "true" ]]; then
             echo "scan_result=failed" >> "$GITHUB_OUTPUT"
             echo "::error::Vulnerabilities found at severity threshold. Build failed."
             exit 1

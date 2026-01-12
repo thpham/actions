@@ -73,9 +73,13 @@ runs:
       id: sign-result
       if: always()
       shell: bash
+      env:
+        SIGN_IMAGES: ${{ inputs.sign-images }}
+        OIDC_OUTCOME: ${{ steps.sign-oidc.outcome }}
+        KEY_OUTCOME: ${{ steps.sign-key.outcome }}
       run: |
-        if [[ "${{ inputs.sign-images }}" == "true" ]]; then
-          if [[ "${{ steps.sign-oidc.outcome }}" == "success" ]] || [[ "${{ steps.sign-key.outcome }}" == "success" ]]; then
+        if [[ "${SIGN_IMAGES}" == "true" ]]; then
+          if [[ "${OIDC_OUTCOME}" == "success" ]] || [[ "${KEY_OUTCOME}" == "success" ]]; then
             echo "signed=true" >> "$GITHUB_OUTPUT"
             echo "Image signing successful"
           else

@@ -69,9 +69,10 @@ runs:
     - name: Prepare platform pair
       id: prepare
       shell: bash
-      run: |
-        platform="${{ inputs.platform }}"
-        PLATFORM_PAIR="${platform//\//-}"
+      env:
+        PLATFORM: ${{ inputs.platform }}
+      run: | # zizmor: ignore[github-env]
+        PLATFORM_PAIR="${PLATFORM//\//-}"
         echo "platform_pair=${PLATFORM_PAIR}" >> "$GITHUB_OUTPUT"
         echo "PLATFORM_PAIR=${PLATFORM_PAIR}" >> "$GITHUB_ENV"
 
