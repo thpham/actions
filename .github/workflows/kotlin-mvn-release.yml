@@ -466,7 +466,7 @@ jobs:
 
       - name: Build and Push Docker Image
         id: build
-        uses: thpham/actions/.github/actions/build-docker-image@feat/composite-action-docker-build
+        uses: thpham/actions/.github/actions/build-docker-image@main # zizmor: ignore[unpinned-uses]
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
@@ -514,6 +514,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          persist-credentials: false
 
       - name: Prepare platform pair
         id: prepare
@@ -535,7 +537,7 @@ jobs:
           echo "Image digest: sha256:${DIGEST_FILE}"
 
       - name: Scan Docker Image
-        uses: thpham/actions/.github/actions/scan-docker-image@feat/composite-action-docker-build
+        uses: thpham/actions/.github/actions/scan-docker-image@main # zizmor: ignore[unpinned-uses]
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
@@ -598,7 +600,7 @@ jobs:
 
       - name: Merge Docker Manifest
         id: manifest-digest
-        uses: thpham/actions/.github/actions/merge-docker-manifest@feat/composite-action-docker-build
+        uses: thpham/actions/.github/actions/merge-docker-manifest@main # zizmor: ignore[unpinned-uses]
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
@@ -608,7 +610,7 @@ jobs:
 
       - name: Sign Docker Image
         id: sign-result
-        uses: thpham/actions/.github/actions/sign-docker-image@feat/composite-action-docker-build
+        uses: thpham/actions/.github/actions/sign-docker-image@main # zizmor: ignore[unpinned-uses]
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}

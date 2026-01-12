@@ -272,11 +272,13 @@ jobs:
         if: inputs.docker-enabled
         env:
           ARTIFACT_PATH: ${{ inputs.artifact-path }}
+          ARTIFACT_DESTINATION: ${{ inputs.artifact-destination }}
+          DOCKER_CONTEXT: ${{ inputs.docker-context }}
         run: |
           echo "=== Artifact Configuration ==="
           echo "artifact-path: ${ARTIFACT_PATH}"
-          echo "artifact-destination: ${{ inputs.artifact-destination }}"
-          echo "docker-context: ${{ inputs.docker-context }}"
+          echo "artifact-destination: ${ARTIFACT_DESTINATION}"
+          echo "docker-context: ${DOCKER_CONTEXT}"
           echo "=== Files matching artifact-path pattern ==="
           # Use find with glob expansion to show what will be uploaded
           eval "ls -la ${ARTIFACT_PATH}" 2>/dev/null || echo "No files found matching pattern"
@@ -412,7 +414,7 @@ jobs:
 
       - name: Build and Push Docker Image
         id: build
-        uses: thpham/actions/.github/actions/build-docker-image@feat/composite-action-docker-build
+        uses: thpham/actions/.github/actions/build-docker-image@main # zizmor: ignore[unpinned-uses]
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
@@ -487,7 +489,7 @@ jobs:
           echo "Image digest: sha256:${DIGEST_FILE}"
 
       - name: Scan Docker Image
-        uses: thpham/actions/.github/actions/scan-docker-image@feat/composite-action-docker-build
+        uses: thpham/actions/.github/actions/scan-docker-image@main # zizmor: ignore[unpinned-uses]
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
@@ -525,7 +527,7 @@ jobs:
 
       - name: Merge Docker Manifest
         id: manifest-digest
-        uses: thpham/actions/.github/actions/merge-docker-manifest@feat/composite-action-docker-build
+        uses: thpham/actions/.github/actions/merge-docker-manifest@main # zizmor: ignore[unpinned-uses]
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
@@ -537,7 +539,7 @@ jobs:
 
       - name: Sign Docker Image
         id: sign-result
-        uses: thpham/actions/.github/actions/sign-docker-image@feat/composite-action-docker-build
+        uses: thpham/actions/.github/actions/sign-docker-image@main # zizmor: ignore[unpinned-uses]
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
