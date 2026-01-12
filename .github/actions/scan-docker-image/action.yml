@@ -133,7 +133,7 @@ runs:
         echo "sbom_file=${SBOM_FILE}" >> "$GITHUB_OUTPUT"
 
     - name: Upload SARIF to GitHub Security
-      uses: github/codeql-action/upload-sarif@45c373516f557556c15d420e3f5e0aa3d64366bc # v3.31.9
+      uses: github/codeql-action/upload-sarif@7434149006143a4d75b82a2f411ef15b03ccc2d7 # v4.31.9
       if: always()
       with:
         sarif_file: "trivy-results-${{ env.PLATFORM_PAIR }}.sarif"
