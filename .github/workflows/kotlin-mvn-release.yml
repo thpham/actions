@@ -466,7 +466,7 @@ jobs:
 
       - name: Build and Push Docker Image
         id: build
-        uses: ./.github/actions/build-docker-image
+        uses: thpham/actions/.github/actions/build-docker-image@feat/composite-action-docker-build
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
@@ -535,7 +535,7 @@ jobs:
           echo "Image digest: sha256:${DIGEST_FILE}"
 
       - name: Scan Docker Image
-        uses: ./.github/actions/scan-docker-image
+        uses: thpham/actions/.github/actions/scan-docker-image@feat/composite-action-docker-build
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
@@ -598,7 +598,7 @@ jobs:
 
       - name: Merge Docker Manifest
         id: manifest-digest
-        uses: ./.github/actions/merge-docker-manifest
+        uses: thpham/actions/.github/actions/merge-docker-manifest@feat/composite-action-docker-build
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
@@ -608,7 +608,7 @@ jobs:
 
       - name: Sign Docker Image
         id: sign-result
-        uses: ./.github/actions/sign-docker-image
+        uses: thpham/actions/.github/actions/sign-docker-image@feat/composite-action-docker-build
         with:
           registry: ${{ inputs.docker-registry }}
           image-name: ${{ inputs.docker-image-name }}
