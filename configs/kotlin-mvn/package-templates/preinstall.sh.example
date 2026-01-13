@@ -1,0 +1,18 @@
+#!/bin/bash
+# jpackage pre-install script (works for both deb and rpm)
+# Copy to: src/jreleaser/assemblers/<appname>/preinst
+set -e
+
+# Create service user if not exists
+if ! id -u myapp >/dev/null 2>&1; then
+    # Use /usr/sbin/nologin for Debian, /sbin/nologin for RHEL
+    NOLOGIN_SHELL="/usr/sbin/nologin"
+    [[ -f /sbin/nologin ]] && NOLOGIN_SHELL="/sbin/nologin"
+    useradd --system --no-create-home --shell "$NOLOGIN_SHELL" myapp
+fi
+
+# Create directories
+mkdir -p /var/log/myapp
+mkdir -p /var/lib/myapp
+
+exit 0

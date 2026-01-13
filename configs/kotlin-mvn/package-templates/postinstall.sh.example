@@ -1,0 +1,44 @@
+#!/bin/bash
+# jpackage post-install script (works for both deb and rpm)
+# Copy to: src/jreleaser/assemblers/<appname>/postinst
+set -e
+
+# Set ownership
+chown -R myapp:myapp /opt/myapp
+chown -R myapp:myapp /var/log/myapp
+chown -R myapp:myapp /var/lib/myapp
+
+# Set permissions
+chmod 750 /opt/myapp
+find /opt/myapp -name "*.jar" -exec chmod 640 {} \;
+
+# Handle RHEL/CentOS sysconfig convention
+if [[ -d /etc/sysconfig ]] && [[ -f /etc/default/myapp.conf ]]; then
+    cp /etc/default/myapp.conf /etc/sysconfig/myapp
+fi
+
+# Reload systemd and enable service
+systemctl daemon-reload
+systemctl enable myapp.service
+
+echo ""
+echo "=============================================="
+echo " MyApp installed successfully!"
+echo "=============================================="
+echo ""
+echo " Start the service:"
+echo "   systemctl start myapp"
+echo ""
+echo " View logs:"
+echo "   journalctl -u myapp -f"
+echo ""
+echo " Edit configuration:"
+if [[ -d /etc/sysconfig ]]; then
+    echo "   /etc/sysconfig/myapp"
+else
+    echo "   /etc/default/myapp.conf"
+fi
+echo "   /etc/myapp/application.yml"
+echo ""
+
+exit 0

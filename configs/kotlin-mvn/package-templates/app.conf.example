@@ -1,0 +1,18 @@
+# /etc/default/myapp.conf (Debian) or /etc/sysconfig/myapp (RHEL)
+# Environment variables for MyApp service
+# Edit this file and run: systemctl restart myapp
+
+# JVM Options
+JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseG1GC"
+
+# Application Options
+APP_OPTS=""
+
+# Spring Profile (uncomment to change)
+# SPRING_PROFILES_ACTIVE=production
+
+# Custom config location (uncomment to override)
+# SPRING_CONFIG_LOCATION=/etc/myapp/
+
+# Logging level (uncomment to change)
+# LOGGING_LEVEL_ROOT=INFO

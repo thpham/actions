@@ -1,0 +1,34 @@
+#!/bin/bash
+# jpackage post-remove script (works for both deb and rpm)
+# Copy to: src/jreleaser/assemblers/<appname>/postrm
+
+# Determine if this is a purge (Debian) or complete uninstall (RPM)
+IS_PURGE=false
+if [[ "$1" == "purge" ]] || [[ "$1" == "0" ]]; then
+    IS_PURGE=true
+fi
+
+if [[ "$IS_PURGE" == "true" ]]; then
+    # Remove service user
+    if id -u myapp >/dev/null 2>&1; then
+        userdel myapp 2>/dev/null || true
+    fi
+
+    # Remove directories
+    rm -rf /var/log/myapp
+    rm -rf /var/lib/myapp
+
+    # Remove config
+    rm -rf /etc/myapp
+    rm -f /etc/default/myapp.conf
+    rm -f /etc/sysconfig/myapp
+
+    echo "MyApp completely removed"
+else
+    echo "MyApp removed (config and data preserved)"
+fi
+
+# Reload systemd
+systemctl daemon-reload 2>/dev/null || true
+
+exit 0

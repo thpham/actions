@@ -130,6 +130,18 @@ on:
         type: boolean
         default: false
 
+      # Native package building (deb/rpm)
+      build-packages:
+        description: "Build deb/rpm packages using nfpm"
+        required: false
+        type: boolean
+        default: false
+      nfpm-config:
+        description: "Path to nfpm.yaml configuration"
+        required: false
+        type: string
+        default: "nfpm.yaml"
+
       # Security scanning configuration (stricter defaults for releases)
       security-scan-enabled:
         description: "Enable Trivy vulnerability scanning"
@@ -667,10 +679,90 @@ jobs:
           retention-days: 90
           if-no-files-found: warn
 
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Build Native Packages (deb/rpm) using nfpm
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Optional job to build deb/rpm packages from the fat JAR.
+  # Requires nfpm.yaml in the consumer repo with package definitions.
+  # Packages are uploaded to the GitHub release as assets.
+  # ─────────────────────────────────────────────────────────────────────────────
+
+  build-distribute-packages:
+    name: Build & Distribute Native Packages
+    needs: [release-please, build]
+    if: |
+      always() &&
+      inputs.build-packages &&
+      needs.release-please.outputs.release_created == 'true' &&
+      needs.build.result == 'success'
+    runs-on: ${{ inputs.amd64-runner }}
+    permissions:
+      contents: write # Required for gh release upload
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6
+        with:
+          fetch-depth: 1 # only the tagged commit, no history needed
+          ref: ${{ needs.release-please.outputs.tag_name }}
+          persist-credentials: false
+          sparse-checkout: |
+            ${{ inputs.nfpm-config }}
+            packaging
+
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: docker-artifacts
+          path: /tmp/build-artifacts
+
+      # Recreate the expected directory structure for nfpm
+      # nfpm.yaml expects artifacts at their original build paths
+      - name: Setup Artifacts for nfpm
+        env:
+          ARTIFACT_PATH: ${{ inputs.artifact-path }}
+          VERSION: ${{ needs.release-please.outputs.version }}
+        run: |
+          echo "=== nfpm Artifact Setup ==="
+          echo "artifact-path input: ${ARTIFACT_PATH}"
+          echo "version: ${VERSION}"
+
+          echo "=== Downloaded build-artifacts ==="
+          find /tmp/build-artifacts -type f
+
+          # Check if artifact-path contains "**" glob pattern
+          if [[ "${ARTIFACT_PATH}" == *"**"* ]]; then
+            # Glob pattern with ** - upload-artifact preserved directory structure
+            echo "=== Glob pattern detected - preserving directory structure ==="
+            cp -r /tmp/build-artifacts/* ./
+          else
+            # Specific path - files were flattened, need to recreate directory structure
+            ARTIFACT_DIR=$(dirname "${ARTIFACT_PATH}")
+            echo "=== Specific path - recreating directory: ${ARTIFACT_DIR} ==="
+            mkdir -p "${ARTIFACT_DIR}"
+            mv /tmp/build-artifacts/* "${ARTIFACT_DIR}/"
+          fi
+
+          echo "=== Available JARs for nfpm ==="
+          find . -name "*.jar" -path "*/target/*" -type f
+
+      - name: Build and Upload Packages
+        uses: thpham/actions/.github/actions/nfpm-build@main # zizmor: ignore[unpinned-uses]
+        with:
+          version: ${{ needs.release-please.outputs.version }}
+          config: ${{ inputs.nfpm-config }}
+          upload-to-release: "true"
+          release-tag: ${{ needs.release-please.outputs.tag_name }}
+
   distribute:
     name: Distribute with JReleaser
     needs: [release-please, build, merge-docker]
-    if: ${{ needs.release-please.outputs.release_created == 'true' && inputs.jreleaser-enabled }}
+    if: |
+      always() &&
+      needs.release-please.outputs.release_created == 'true' &&
+      inputs.jreleaser-enabled &&
+      needs.build.result == 'success' &&
+      needs.merge-docker.result == 'success'
     runs-on: ${{ inputs.amd64-runner }}
     permissions:
       contents: write

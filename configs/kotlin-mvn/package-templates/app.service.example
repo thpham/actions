@@ -1,0 +1,49 @@
+[Unit]
+Description=MyApp Spring Boot Application
+Documentation=https://github.com/yourorg/yourrepo
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=myapp
+Group=myapp
+WorkingDirectory=/opt/myapp
+
+# Main execution - uses environment file for JAVA_OPTS
+ExecStart=/bin/bash -c 'exec /usr/bin/java $JAVA_OPTS -jar /opt/myapp/myapp.jar $APP_OPTS'
+
+# Graceful shutdown
+ExecStop=/bin/kill -TERM $MAINPID
+TimeoutStopSec=30
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=myapp
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+# Allow writes to specific directories
+ReadWritePaths=/var/log/myapp
+ReadWritePaths=/var/lib/myapp
+
+# Environment file (Debian: /etc/default, RHEL: /etc/sysconfig)
+EnvironmentFile=-/etc/default/myapp.conf
+EnvironmentFile=-/etc/sysconfig/myapp
+
+[Install]
+WantedBy=multi-user.target

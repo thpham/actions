@@ -1,0 +1,102 @@
+# yaml-language-server: $schema=https://nfpm.goreleaser.com/schema.json
+# nfpm.yaml - Package configuration for both deb and rpm
+# https://nfpm.goreleaser.com/configuration/
+#
+# Copy this file to your project root and customize as needed.
+# Build packages with:
+#   export VERSION=1.0.0
+#   nfpm package --config nfpm.yaml --packager deb --target dist/
+#   nfpm package --config nfpm.yaml --packager rpm --target dist/
+#
+# Note: The workflow uses envsubst to expand ${VERSION} before running nfpm.
+
+name: myapp
+arch: all  # Architecture-independent (Java bytecode runs on any JVM)
+platform: linux
+version: "${VERSION}"  # Set via environment variable, expanded by envsubst
+release: 1
+maintainer: "DevOps Team <devops@example.com>"
+description: "My Spring Boot Application"
+vendor: "Example Corp"
+homepage: "https://github.com/yourorg/yourrepo"
+license: "Apache-2.0"
+
+# Top-level section and priority (for deb packages)
+section: java
+priority: optional
+
+# Package contents
+contents:
+  # Main JAR file
+  - src: modules/api/target/api-${VERSION}.jar
+    dst: /opt/myapp/myapp.jar
+    file_info:
+      mode: 0640
+      owner: myapp
+      group: myapp
+
+  # Systemd service file
+  - src: packaging/myapp.service
+    dst: /lib/systemd/system/myapp.service
+    file_info:
+      mode: 0644
+
+  # Environment defaults
+  - src: packaging/myapp.conf
+    dst: /etc/default/myapp
+    type: config|noreplace
+    file_info:
+      mode: 0640
+      owner: root
+      group: myapp
+
+  # Application config
+  - src: packaging/application.yml
+    dst: /etc/myapp/application.yml
+    type: config|noreplace
+    file_info:
+      mode: 0640
+      owner: myapp
+      group: myapp
+
+  # Create empty directories
+  - dst: /var/log/myapp
+    type: dir
+    file_info:
+      mode: 0750
+      owner: myapp
+      group: myapp
+
+  - dst: /var/lib/myapp
+    type: dir
+    file_info:
+      mode: 0750
+      owner: myapp
+      group: myapp
+
+  - dst: /opt/myapp
+    type: dir
+    file_info:
+      mode: 0750
+      owner: myapp
+      group: myapp
+
+# Scripts (same for both deb and rpm)
+scripts:
+  preinstall: packaging/scripts/preinstall.sh
+  postinstall: packaging/scripts/postinstall.sh
+  preremove: packaging/scripts/preremove.sh
+  postremove: packaging/scripts/postremove.sh
+
+# Packager-specific overrides
+overrides:
+  deb:
+    # Dependencies for Debian/Ubuntu
+    depends:
+      - default-jre-headless (>= 17) | openjdk-17-jre-headless | openjdk-21-jre-headless
+  rpm:
+    # Dependencies for RHEL/CentOS/Fedora/Rocky
+    # Use jre virtual provide - works across Java 17, 21, etc.
+    # Provided by java-*-openjdk-headless packages via javapackages-tools
+    depends:
+      - jre-headless >= 17

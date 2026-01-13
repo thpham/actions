@@ -1,0 +1,15 @@
+#!/bin/bash
+# jpackage pre-remove script (works for both deb and rpm)
+# Copy to: src/jreleaser/assemblers/<appname>/prerm
+set -e
+
+# Stop service before removal
+if systemctl is-active --quiet myapp 2>/dev/null; then
+    echo "Stopping myapp service..."
+    systemctl stop myapp
+fi
+
+# Disable service
+systemctl disable myapp.service 2>/dev/null || true
+
+exit 0

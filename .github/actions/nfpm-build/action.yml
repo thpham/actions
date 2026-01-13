@@ -1,0 +1,144 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+# nfpm-build/action.yml - Build deb/rpm packages using nfpm
+# https://nfpm.goreleaser.com/
+#
+# Usage:
+#   - uses: thpham/actions/nfpm-build@main
+#     with:
+#       version: "1.0.0"
+#       config: "nfpm.yaml"
+#       output-dir: "dist"
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: "nfpm Build"
+description: "Build deb/rpm packages using nfpm"
+author: "thpham"
+
+inputs:
+  version:
+    description: "Package version (will be expanded in nfpm config as ${VERSION})"
+    required: true
+  config:
+    description: "Path to nfpm.yaml configuration file"
+    required: false
+    default: "nfpm.yaml"
+  output-dir:
+    description: "Output directory for built packages"
+    required: false
+    default: "dist"
+  nfpm-version:
+    description: "nfpm version to install"
+    required: false
+    default: "2.44.1"
+  packagers:
+    description: "Comma-separated list of packagers to build (deb,rpm)"
+    required: false
+    default: "deb,rpm"
+  upload-to-release:
+    description: "Upload packages to GitHub release"
+    required: false
+    default: "false"
+  release-tag:
+    description: "GitHub release tag (required if upload-to-release is true)"
+    required: false
+    default: ""
+
+outputs:
+  packages:
+    description: "Space-separated list of built package files"
+    value: ${{ steps.build.outputs.packages }}
+  deb-package:
+    description: "Path to the built .deb package (if any)"
+    value: ${{ steps.build.outputs.deb_package }}
+  rpm-package:
+    description: "Path to the built .rpm package (if any)"
+    value: ${{ steps.build.outputs.rpm_package }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install nfpm
+      shell: bash
+      env:
+        NFPM_VERSION: ${{ inputs.nfpm-version }}
+      run: |
+        echo "::group::Installing nfpm v${NFPM_VERSION}"
+        mkdir -p /tmp/nfpm-download
+        curl -sfL "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_Linux_x86_64.tar.gz" \
+          | tar xz -C /tmp/nfpm-download
+        sudo mv /tmp/nfpm-download/nfpm /usr/local/bin/
+        rm -rf /tmp/nfpm-download
+        nfpm --version
+        echo "::endgroup::"
+
+    - name: Build Packages
+      id: build
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        NFPM_CONFIG: ${{ inputs.config }}
+        OUTPUT_DIR: ${{ inputs.output-dir }}
+        PACKAGERS: ${{ inputs.packagers }}
+      run: |
+        echo "::group::Building packages for version ${VERSION}"
+        mkdir -p "${OUTPUT_DIR}"
+
+        # Expand environment variables in nfpm config
+        # nfpm doesn't auto-expand ${VERSION} so we use envsubst
+        echo "Expanding variables in ${NFPM_CONFIG}..."
+        envsubst < "${NFPM_CONFIG}" > /tmp/nfpm-expanded.yaml
+
+        echo "=== Expanded nfpm config ==="
+        cat /tmp/nfpm-expanded.yaml
+        echo ""
+
+        BUILT_PACKAGES=""
+        DEB_PACKAGE=""
+        RPM_PACKAGE=""
+
+        # Build each requested packager
+        IFS=',' read -ra PACKAGER_LIST <<< "${PACKAGERS}"
+        for packager in "${PACKAGER_LIST[@]}"; do
+          packager=$(echo "${packager}" | xargs)  # trim whitespace
+          echo "Building .${packager} package..."
+          nfpm package --config /tmp/nfpm-expanded.yaml --packager "${packager}" --target "${OUTPUT_DIR}/"
+
+          # Find the built package
+          case "${packager}" in
+            deb)
+              DEB_PACKAGE=$(ls "${OUTPUT_DIR}"/*.deb 2>/dev/null | head -1)
+              [[ -n "${DEB_PACKAGE}" ]] && BUILT_PACKAGES="${BUILT_PACKAGES} ${DEB_PACKAGE}"
+              ;;
+            rpm)
+              RPM_PACKAGE=$(ls "${OUTPUT_DIR}"/*.rpm 2>/dev/null | head -1)
+              [[ -n "${RPM_PACKAGE}" ]] && BUILT_PACKAGES="${BUILT_PACKAGES} ${RPM_PACKAGE}"
+              ;;
+          esac
+        done
+
+        echo "=== Built packages ==="
+        ls -la "${OUTPUT_DIR}/"
+
+        # Set outputs
+        echo "packages=${BUILT_PACKAGES}" >> "${GITHUB_OUTPUT}"
+        echo "deb_package=${DEB_PACKAGE}" >> "${GITHUB_OUTPUT}"
+        echo "rpm_package=${RPM_PACKAGE}" >> "${GITHUB_OUTPUT}"
+        echo "::endgroup::"
+
+    - name: Upload Packages to Release
+      if: inputs.upload-to-release == 'true' && inputs.release-tag != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TAG_NAME: ${{ inputs.release-tag }}
+        OUTPUT_DIR: ${{ inputs.output-dir }}
+      run: |
+        echo "::group::Uploading packages to release ${TAG_NAME}"
+        for pkg in "${OUTPUT_DIR}"/*.deb "${OUTPUT_DIR}"/*.rpm; do
+          if [[ -f "${pkg}" ]]; then
+            echo "Uploading: ${pkg}"
+            gh release upload "${TAG_NAME}" "${pkg}" --clobber
+          fi
+        done
+        echo "Native packages uploaded successfully"
+        echo "::endgroup::"
