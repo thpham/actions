@@ -99,14 +99,14 @@ jobs:
         if: steps.sonar-check.outputs.skip != 'true'
         # Read-only cache restore to prevent cache poisoning attacks
         # Maven artifacts are immutable, so no hash-based invalidation needed
-        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v4
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven
 
       - name: Restore SonarQube cache
         if: steps.sonar-check.outputs.skip != 'true'
-        uses: actions/cache/restore@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v4
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
@@ -149,7 +149,7 @@ jobs:
         # Only save cache on push events (not PRs) to prevent cache poisoning
         # Maven artifacts are immutable, so no hash-based invalidation needed
         if: steps.sonar-check.outputs.skip != 'true' && github.event_name == 'push'
-        uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v4
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven
@@ -157,7 +157,7 @@ jobs:
       - name: Save SonarQube cache
         # Only save cache on push events (not PRs) to prevent cache poisoning
         if: steps.sonar-check.outputs.skip != 'true' && github.event_name == 'push'
-        uses: actions/cache/save@9255dc7a253b0ccc959486e2bca901246202afeb # v4
+        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v4
         with:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
