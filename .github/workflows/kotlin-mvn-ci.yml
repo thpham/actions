@@ -209,7 +209,7 @@ jobs:
           distribution: ${{ inputs.java-distribution }}
 
       - name: Restore Maven cache
-        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v4
+        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
@@ -301,7 +301,7 @@ jobs:
         # Only save cache on push events (not PRs) to prevent cache poisoning
         # Maven artifacts are immutable, so no hash-based invalidation needed
         if: github.event_name == 'push'
-        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v4
+        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven
@@ -329,7 +329,7 @@ jobs:
       - name: Restore Maven cache
         # Read-only cache restore to prevent cache poisoning attacks
         # Maven artifacts are immutable, so no hash-based invalidation needed
-        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v4
+        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 # v5.0.2
         with:
           path: ~/.m2/repository
           key: ${{ runner.os }}-maven
