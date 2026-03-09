@@ -433,7 +433,7 @@ jobs:
 
       # Upload Docker artifacts separately (just the JAR for Docker builds)
       - name: Upload Docker Artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: docker-artifacts
           path: ${{ inputs.artifact-path }}
@@ -441,7 +441,7 @@ jobs:
 
       # Upload release artifacts for JReleaser (staging directory with all Maven artifacts)
       - name: Upload Release Artifacts
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: release-artifacts
           path: ${{ inputs.staging-deploy-dir }}/
@@ -672,7 +672,7 @@ jobs:
 
       - name: Upload Combined SBOM Artifact
         if: inputs.sbom-enabled
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: sbom-combined
           path: /tmp/sboms/sbom-combined.*
@@ -881,7 +881,7 @@ jobs:
           JRELEASER_SLACK_WEBHOOK: ${{ inputs.notify-slack && secrets.SLACK_WEBHOOK || '' }} # zizmor: ignore[secrets-outside-env]
 
       - name: Upload JReleaser Output
-        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         if: always()
         with:
           name: jreleaser-output
