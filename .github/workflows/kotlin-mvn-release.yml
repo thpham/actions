@@ -629,8 +629,8 @@ jobs:
           digest: ${{ steps.manifest-digest.outputs.digest }}
           sign-images: ${{ inputs.sign-images }}
           signing-method: ${{ inputs.signing-method }}
-          cosign-private-key: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          cosign-password: ${{ secrets.COSIGN_PASSWORD }}
+          cosign-private-key: ${{ secrets.COSIGN_PRIVATE_KEY }} # zizmor: ignore[secrets-outside-env]
+          cosign-password: ${{ secrets.COSIGN_PASSWORD }} # zizmor: ignore[secrets-outside-env]
 
       # Merged SBOM for release assets (per-architecture attestation happens in scan-docker job)
       # This merged SBOM is for download convenience only - not attested to manifest
@@ -867,18 +867,18 @@ jobs:
           fi
 
       - name: Run JReleaser
-        uses: jreleaser/release-action@90ac653bb9c79d11179e65d81499f3f34527dcd5 # v2
+        uses: jreleaser/release-action@90ac653bb9c79d11179e65d81499f3f34527dcd5 # v2.5.0
         with:
           arguments: full-release
           setup-java: false
         env:
           JRELEASER_PROJECT_VERSION: ${{ needs.release-please.outputs.version }}
           JRELEASER_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JRELEASER_GPG_SECRET_KEY: ${{ inputs.gpg-signing && secrets.GPG_SECRET_KEY || '' }}
-          JRELEASER_GPG_PASSPHRASE: ${{ inputs.gpg-signing && secrets.GPG_PASSPHRASE || '' }}
-          JRELEASER_GPG_PUBLIC_KEY: ${{ inputs.gpg-signing && secrets.GPG_PUBLIC_KEY || '' }}
-          JRELEASER_TEAMS_WEBHOOK: ${{ inputs.notify-teams && secrets.TEAMS_WEBHOOK || '' }}
-          JRELEASER_SLACK_WEBHOOK: ${{ inputs.notify-slack && secrets.SLACK_WEBHOOK || '' }}
+          JRELEASER_GPG_SECRET_KEY: ${{ inputs.gpg-signing && secrets.GPG_SECRET_KEY || '' }} # zizmor: ignore[secrets-outside-env]
+          JRELEASER_GPG_PASSPHRASE: ${{ inputs.gpg-signing && secrets.GPG_PASSPHRASE || '' }} # zizmor: ignore[secrets-outside-env]
+          JRELEASER_GPG_PUBLIC_KEY: ${{ inputs.gpg-signing && secrets.GPG_PUBLIC_KEY || '' }} # zizmor: ignore[secrets-outside-env]
+          JRELEASER_TEAMS_WEBHOOK: ${{ inputs.notify-teams && secrets.TEAMS_WEBHOOK || '' }} # zizmor: ignore[secrets-outside-env]
+          JRELEASER_SLACK_WEBHOOK: ${{ inputs.notify-slack && secrets.SLACK_WEBHOOK || '' }} # zizmor: ignore[secrets-outside-env]
 
       - name: Upload JReleaser Output
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6

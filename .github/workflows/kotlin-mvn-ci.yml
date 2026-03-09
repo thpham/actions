@@ -546,8 +546,8 @@ jobs:
           digest: ${{ steps.manifest-digest.outputs.digest }}
           sign-images: ${{ inputs.sign-images }}
           signing-method: ${{ inputs.signing-method }}
-          cosign-private-key: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          cosign-password: ${{ secrets.COSIGN_PASSWORD }}
+          cosign-private-key: ${{ secrets.COSIGN_PRIVATE_KEY }} # zizmor: ignore[secrets-outside-env]
+          cosign-password: ${{ secrets.COSIGN_PASSWORD }} # zizmor: ignore[secrets-outside-env]
 
       - name: Comment PR with preview info
         if: github.event_name == 'pull_request'
