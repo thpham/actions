@@ -341,7 +341,7 @@ jobs:
 
       - name: Cancel workflow on lint failure
         if: ${{ steps.spotless.outcome == 'failure' && inputs.cancel-on-lint-failure }}
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v7
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         with:
           script: |
             console.log('Lint failed - cancelling workflow to save CI minutes');
@@ -551,7 +551,7 @@ jobs:
 
       - name: Comment PR with preview info
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v7
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           PRIMARY_TAG: ${{ needs.build.outputs.primary_tag }}
           ROLLING_TAG: ${{ needs.build.outputs.rolling_tag }}

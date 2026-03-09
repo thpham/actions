@@ -55,7 +55,7 @@ jobs:
           persist-credentials: false
 
       - name: Check Commits and Suggest Labels
-        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v7
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
         env:
           BACKPORTABLE_TYPES: ${{ inputs.backportable-types }}
           MAX_BRANCHES: ${{ inputs.max-release-branches }}
